@@ -1,0 +1,9 @@
+{
+  "key": "BENCH-17",
+  "title": "Division helper must not crash on zero",
+  "description": "Report code divides by user-supplied numbers.",
+  "acceptance_criteria": [
+    "Dividing by zero returns None.",
+    "Other divisions return the quotient."
+  ]
+}

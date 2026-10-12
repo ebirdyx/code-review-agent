@@ -1,0 +1,16 @@
+{
+  "case_id": "fetch-profile",
+  "group": "error_handling",
+  "expected_findings": [
+    {
+      "category": "error_handling",
+      "file": "profiles/client.py",
+      "line": 11,
+      "code_anchor": "with urllib.request.urlopen(",
+      "description": "Network failures and HTTP errors (including 404) propagate as raw exceptions; nothing produces the friendly error or 'Profile not found'. There is also no timeout."
+    }
+  ],
+  "must_not_report": [],
+  "expected_limitations": [],
+  "notes": "Missing handling of URLError/HTTPError. A separate 'no timeout' finding is a plausible extra."
+}

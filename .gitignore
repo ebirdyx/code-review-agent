@@ -1,0 +1,15 @@
+# Python / uv
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Secrets: never commit. Keep only .env.example
+.env
+
+# Local tool configuration
+.claude/
+
+# Generated output (reports, runs, demos)
+out/
+runs/

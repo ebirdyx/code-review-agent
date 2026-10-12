@@ -1,0 +1,29 @@
+{
+  "findings": [
+    {
+      "category": "requirement_mismatch",
+      "severity": "medium",
+      "file": "auth/validators.py",
+      "line": 11,
+      "title": "Password length check rejects valid 8‑character passwords",
+      "explanation": "The ticket requires passwords of 8 or more characters to be accepted, but the implementation rejects passwords whose length is less than or **equal** to 8, causing valid 8‑character passwords to be rejected.",
+      "evidence": [
+        {
+          "source": "ticket",
+          "quote": "A password of 8 or more characters is accepted."
+        },
+        {
+          "source": "ticket",
+          "quote": "A password shorter than 8 characters is rejected with an error."
+        },
+        {
+          "source": "code",
+          "quote": "if len(password) <= 8:"
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "No supporting code was provided beyond the diff, so integration with the sign‑up flow cannot be verified."
+  ]
+}

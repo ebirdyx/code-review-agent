@@ -1,0 +1,16 @@
+{
+  "case_id": "parse-quantity",
+  "group": "error_handling",
+  "expected_findings": [
+    {
+      "category": "error_handling",
+      "file": "orders/parsing.py",
+      "line": 8,
+      "code_anchor": "except Exception:",
+      "description": "Invalid input is swallowed and silently turned into 0 instead of being rejected with a clear error message."
+    }
+  ],
+  "must_not_report": [],
+  "expected_limitations": [],
+  "notes": "Swallowed exception."
+}

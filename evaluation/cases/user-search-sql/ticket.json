@@ -1,0 +1,8 @@
+{
+  "key": "BENCH-13",
+  "title": "Search users by name",
+  "description": "Admins need to find user accounts by name.",
+  "acceptance_criteria": [
+    "Searching for 'Alice' returns the users named Alice."
+  ]
+}

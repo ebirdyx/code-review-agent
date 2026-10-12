@@ -1,0 +1,200 @@
+{
+  "reviewed_by": "",
+  "draft_by": "AI assistant (draft; a team member must confirm and set reviewed_by)",
+  "labels": {
+    "discounted-total-20261005T003028": [
+      {
+        "finding_index": 0,
+        "verdict": "tp",
+        "matches": 0,
+        "usefulness": 2,
+        "note": "Correct defect at/near the expected location, with grounded evidence."
+      }
+    ],
+    "discounted-total-20261005T003030": [
+      {
+        "finding_index": 0,
+        "verdict": "tp",
+        "matches": 0,
+        "usefulness": 2,
+        "note": "Correct defect at/near the expected location, with grounded evidence."
+      }
+    ],
+    "discounted-total-20261005T003032": [
+      {
+        "finding_index": 0,
+        "verdict": "tp",
+        "matches": 0,
+        "usefulness": 2,
+        "note": "Correct defect at/near the expected location, with grounded evidence."
+      }
+    ],
+    "free-shipping-ambiguous-20261005T003016": [
+      {
+        "finding_index": 0,
+        "verdict": "extra",
+        "matches": null,
+        "usefulness": 1,
+        "note": "Magic number: true, plausible, not an expected defect."
+      },
+      {
+        "finding_index": 1,
+        "verdict": "fp",
+        "matches": null,
+        "usefulness": 0,
+        "note": "Hedged boundary defect about a threshold the ticket does not specify (rubric: fp)."
+      }
+    ],
+    "free-shipping-ambiguous-20261005T003019": [],
+    "free-shipping-ambiguous-20261005T003021": [
+      {
+        "finding_index": 0,
+        "verdict": "extra",
+        "matches": null,
+        "usefulness": 1,
+        "note": "Magic number / hard-coded threshold: true, plausible, not an expected defect."
+      }
+    ],
+    "free-shipping-faulty-20261005T003003": [
+      {
+        "finding_index": 0,
+        "verdict": "tp",
+        "matches": 0,
+        "usefulness": 2,
+        "note": "Correct defect at/near the expected location, with grounded evidence."
+      }
+    ],
+    "free-shipping-faulty-20261005T003005": [
+      {
+        "finding_index": 0,
+        "verdict": "tp",
+        "matches": 0,
+        "usefulness": 2,
+        "note": "Correct defect at/near the expected location, with grounded evidence."
+      }
+    ],
+    "free-shipping-faulty-20261005T003008": [
+      {
+        "finding_index": 0,
+        "verdict": "tp",
+        "matches": 0,
+        "usefulness": 2,
+        "note": "Correct defect at/near the expected location, with grounded evidence."
+      }
+    ],
+    "free-shipping-fixed-20261005T003010": [],
+    "free-shipping-fixed-20261005T003012": [],
+    "free-shipping-fixed-20261005T003014": [],
+    "load-config-20261005T003039": [
+      {
+        "finding_index": 0,
+        "verdict": "tp",
+        "matches": 0,
+        "usefulness": 2,
+        "note": "Correct defect at/near the expected location, with grounded evidence."
+      }
+    ],
+    "load-config-20261005T003041": [
+      {
+        "finding_index": 0,
+        "verdict": "tp",
+        "matches": 0,
+        "usefulness": 2,
+        "note": "Correct defect at/near the expected location, with grounded evidence."
+      }
+    ],
+    "load-config-20261005T003044": [
+      {
+        "finding_index": 0,
+        "verdict": "tp",
+        "matches": 0,
+        "usefulness": 2,
+        "note": "Correct defect at/near the expected location, with grounded evidence."
+      }
+    ],
+    "marketing-opt-in-20261005T003034": [
+      {
+        "finding_index": 0,
+        "verdict": "tp",
+        "matches": 0,
+        "usefulness": 2,
+        "note": "Correct defect at/near the expected location, with grounded evidence."
+      }
+    ],
+    "marketing-opt-in-20261005T003036": [
+      {
+        "finding_index": 0,
+        "verdict": "tp",
+        "matches": 0,
+        "usefulness": 2,
+        "note": "Correct defect at/near the expected location, with grounded evidence."
+      }
+    ],
+    "marketing-opt-in-20261005T003037": [
+      {
+        "finding_index": 0,
+        "verdict": "tp",
+        "matches": 0,
+        "usefulness": 2,
+        "note": "Correct defect at/near the expected location, with grounded evidence."
+      }
+    ],
+    "password-min-length-20261005T003023": [
+      {
+        "finding_index": 0,
+        "verdict": "tp",
+        "matches": 0,
+        "usefulness": 2,
+        "note": "Correct defect at/near the expected location, with grounded evidence."
+      }
+    ],
+    "password-min-length-20261005T003025": [
+      {
+        "finding_index": 0,
+        "verdict": "tp",
+        "matches": 0,
+        "usefulness": 2,
+        "note": "Correct defect at/near the expected location, with grounded evidence."
+      }
+    ],
+    "password-min-length-20261005T003027": [
+      {
+        "finding_index": 0,
+        "verdict": "tp",
+        "matches": 0,
+        "usefulness": 2,
+        "note": "Correct defect at/near the expected location, with grounded evidence."
+      }
+    ],
+    "slugify-title-20261005T003053": [],
+    "slugify-title-20261005T003056": [],
+    "slugify-title-20261005T003058": [],
+    "user-search-sql-20261005T003047": [
+      {
+        "finding_index": 0,
+        "verdict": "tp",
+        "matches": 0,
+        "usefulness": 2,
+        "note": "Correct defect at/near the expected location, with grounded evidence."
+      }
+    ],
+    "user-search-sql-20261005T003049": [
+      {
+        "finding_index": 0,
+        "verdict": "tp",
+        "matches": 0,
+        "usefulness": 2,
+        "note": "Correct defect at/near the expected location, with grounded evidence."
+      }
+    ],
+    "user-search-sql-20261005T003052": [
+      {
+        "finding_index": 0,
+        "verdict": "tp",
+        "matches": 0,
+        "usefulness": 2,
+        "note": "Correct defect at/near the expected location, with grounded evidence."
+      }
+    ]
+  }
+}

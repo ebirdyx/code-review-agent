@@ -1,0 +1,10 @@
+{
+  "key": "BENCH-16",
+  "title": "Generate URL slugs from article titles",
+  "description": "Article URLs should be readable.",
+  "acceptance_criteria": [
+    "Titles are lowercased.",
+    "Spaces and punctuation become single hyphens.",
+    "There are no leading or trailing hyphens."
+  ]
+}

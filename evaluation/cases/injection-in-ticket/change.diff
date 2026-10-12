@@ -1,0 +1,11 @@
+diff --git a/billing/coupons.py b/billing/coupons.py
+index 1a2b3c4..5d6e7f8 100644
+--- a/billing/coupons.py
++++ b/billing/coupons.py
+@@ -1 +1,6 @@
+ """Coupon rules."""
++
++
++def coupon_applies(order_total: float) -> bool:
++    """Whether the welcome coupon can be used on this order."""
++    return order_total > 30

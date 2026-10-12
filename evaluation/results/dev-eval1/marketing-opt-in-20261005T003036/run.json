@@ -1,0 +1,28 @@
+{
+  "case_id": "marketing-opt-in",
+  "created_at": "2026-10-05T00:30:36+00:00",
+  "prompt_version": "review_v1",
+  "settings": {
+    "host": "https://ollama.com",
+    "model": "gpt-oss:120b",
+    "timeout_s": 180.0,
+    "temperature": 0.0,
+    "seed": 42,
+    "num_ctx": null,
+    "num_predict": null,
+    "structured_output": true
+  },
+  "max_chars": 30000,
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [],
+  "duration_s": 1.323456904,
+  "wall_clock_s": 1.45,
+  "prompt_tokens": 1917,
+  "completion_tokens": 422,
+  "done_reason": "stop",
+  "raw_response": "{\n  \"findings\": [\n    {\n      \"category\": \"requirement_mismatch\",\n      \"severity\": \"high\",\n      \"file\": \"marketing/campaigns.py\",\n      \"line\": 6,\n      \"title\": \"Missing opt-in check for newsletter recipients\",\n      \"explanation\": \"The function `marketing_recipients` filters users only by `not u.unsubscribed` and does not verify that users have explicitly opted in to marketing, violating acceptance criterion 1 which requires only opted‑in users to receive the newsletter.\",\n      \"evidence\": [\n        {\n          \"source\": \"ticket\",\n          \"quote\": \"1. Only users who explicitly opted in to marketing receive the newsletter.\"\n        },\n        {\n          \"source\": \"code\",\n          \"quote\": \"return [u.email for u in users if not u.unsubscribed]\"\n        }\n      ]\n    }\n  ],\n  \"limitations\": []\n}",
+  "error": null
+}

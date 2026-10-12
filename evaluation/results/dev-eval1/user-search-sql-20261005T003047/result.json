@@ -1,0 +1,42 @@
+{
+  "status": "completed",
+  "findings": [
+    {
+      "category": "security",
+      "severity": "high",
+      "file": "users/search.py",
+      "line": 8,
+      "title": "SQL injection vulnerability in find_users_by_name",
+      "explanation": "The function builds the SQL query by directly interpolating the user-provided 'name' parameter into the query string, allowing an attacker to inject arbitrary SQL code. This violates secure coding practices and could lead to data leakage or modification.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "query = f\"SELECT id, name, email FROM users WHERE name = '{name}'\""
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "No supporting code was provided, so the review cannot assess how find_users_by_name is integrated, whether inputs are validated elsewhere, or if the function is used in a context that mitigates injection risks."
+  ],
+  "error": null,
+  "run": {
+    "case_id": "user-search-sql",
+    "created_at": "2026-10-05T00:30:47+00:00",
+    "prompt_version": "review_v1",
+    "model": "gpt-oss:120b",
+    "host": "https://ollama.com",
+    "duration_s": 1.758785262,
+    "prompt_tokens": 1898,
+    "completion_tokens": 400
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [
+    "No supporting code was provided; only the diff is visible."
+  ],
+  "problems": [],
+  "duplicates_removed": 0
+}

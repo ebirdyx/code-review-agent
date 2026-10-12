@@ -1,0 +1,30 @@
+{
+  "case_id": "free-shipping-ambiguous",
+  "created_at": "2026-10-05T00:30:21+00:00",
+  "prompt_version": "review_v1",
+  "settings": {
+    "host": "https://ollama.com",
+    "model": "gpt-oss:120b",
+    "timeout_s": 180.0,
+    "temperature": 0.0,
+    "seed": 42,
+    "num_ctx": null,
+    "num_predict": null,
+    "structured_output": true
+  },
+  "max_chars": 30000,
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [
+    "No supporting code was provided; only the diff is visible."
+  ],
+  "duration_s": 2.241807944,
+  "wall_clock_s": 2.37,
+  "prompt_tokens": 1863,
+  "completion_tokens": 580,
+  "done_reason": "stop",
+  "raw_response": "{\n  \"findings\": [\n    {\n      \"category\": \"maintainability\",\n      \"severity\": \"low\",\n      \"file\": \"shop/shipping.py\",\n      \"line\": 6,\n      \"title\": \"Hard‑coded shipping threshold\",\n      \"explanation\": \"The shipping cost function uses a literal value `100` to decide when shipping is free. Hard‑coding the threshold makes the rule difficult to change and obscures its meaning; it should be defined as a named constant or configuration value.\",\n      \"evidence\": [\n        {\n          \"source\": \"code\",\n          \"quote\": \"if total > 100:\"\n        }\n      ]\n    }\n  ],\n  \"limitations\": [\n    \"The ticket does not specify the exact monetary threshold for free shipping, so it is unclear whether using `> 100` matches the intended requirement (e.g., whether the threshold should be inclusive).\",\n    \"The supporting code defining `SHIPPING_FEE` and any related constants is missing, preventing verification of type consistency and default fee handling.\"\n  ]\n}",
+  "error": null
+}

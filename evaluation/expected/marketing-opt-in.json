@@ -1,0 +1,16 @@
+{
+  "case_id": "marketing-opt-in",
+  "group": "requirement",
+  "expected_findings": [
+    {
+      "category": "requirement_mismatch",
+      "file": "marketing/campaigns.py",
+      "line": 8,
+      "code_anchor": "if not u.unsubscribed",
+      "description": "The filter ignores `opted_in_to_marketing`. Users who never opted in (the default is False) would receive the newsletter, contradicting the first criterion."
+    }
+  ],
+  "must_not_report": [],
+  "expected_limitations": [],
+  "notes": "Needs the supporting User model to see that opt-in defaults to False."
+}

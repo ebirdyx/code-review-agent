@@ -1,0 +1,4 @@
+{
+  "title": "BENCH-13: find_users_by_name",
+  "description": "Adds the query used by the admin search box."
+}

@@ -1,0 +1,27 @@
+{
+  "findings": [
+    {
+      "category": "logic_defect",
+      "severity": "high",
+      "file": "shop/pricing.py",
+      "line": 11,
+      "title": "Incorrect discount calculation",
+      "explanation": "The function `discounted_total` multiplies the subtotal by the discount percentage, which yields the discount amount instead of the discounted total. According to the acceptance criteria, a 20% discount on a cart worth 200 should result in 160, but the current implementation would return 40. A 0% discount should leave the total unchanged, but the implementation returns 0.",
+      "evidence": [
+        {
+          "source": "ticket",
+          "quote": "1. A 20% discount on a cart worth 200 gives a total of 160."
+        },
+        {
+          "source": "ticket",
+          "quote": "2. A 0% discount leaves the total unchanged."
+        },
+        {
+          "source": "code",
+          "quote": "return subtotal * discount_percent / 100"
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}

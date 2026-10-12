@@ -1,0 +1,4 @@
+{
+  "title": "BENCH-1: password length check",
+  "description": "Adds validate_password to the sign-up validators."
+}

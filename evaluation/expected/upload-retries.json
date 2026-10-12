@@ -1,0 +1,16 @@
+{
+  "case_id": "upload-retries",
+  "group": "requirement",
+  "expected_findings": [
+    {
+      "category": "requirement_mismatch",
+      "file": "uploads/client.py",
+      "line": 5,
+      "code_anchor": "MAX_RETRIES = 5",
+      "description": "The upload is attempted 5 times, but the criteria allow at most 3 attempts in total."
+    }
+  ],
+  "must_not_report": [],
+  "expected_limitations": [],
+  "notes": "Constant disagrees with the ticket."
+}

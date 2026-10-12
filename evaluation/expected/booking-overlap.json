@@ -1,0 +1,16 @@
+{
+  "case_id": "booking-overlap",
+  "group": "logic",
+  "expected_findings": [
+    {
+      "category": "logic_defect",
+      "file": "booking/overlap.py",
+      "line": 8,
+      "code_anchor": "return a_start < b_end or b_start < a_end",
+      "description": "`or` should be `and`. As written, almost any two ranges are reported as overlapping, including disjoint ones."
+    }
+  ],
+  "must_not_report": [],
+  "expected_limitations": [],
+  "notes": "Wrong boolean operator."
+}

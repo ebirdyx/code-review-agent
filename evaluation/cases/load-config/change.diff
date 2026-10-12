@@ -1,0 +1,14 @@
+diff --git a/app/config.py b/app/config.py
+index 1a2b3c4..5d6e7f8 100644
+--- a/app/config.py
++++ b/app/config.py
+@@ -6,3 +6,9 @@
+ logger = logging.getLogger(__name__)
+ 
+ DEFAULTS = {"theme": "light", "language": "en"}
++
++
++def load_config(path: str) -> dict:
++    """Load settings from a JSON file."""
++    with open(path, encoding="utf-8") as f:
++        return {**DEFAULTS, **json.load(f)}

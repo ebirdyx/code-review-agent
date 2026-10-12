@@ -1,0 +1,10 @@
+{
+  "case_id": "slugify-title",
+  "group": "correct",
+  "expected_findings": [],
+  "must_not_report": [
+    "Any claim that slugify violates the criteria."
+  ],
+  "expected_limitations": [],
+  "notes": "Correct change."
+}

@@ -1,0 +1,9 @@
+{
+  "title": "KAN-4: free shipping from $100",
+  "description": "Adds free shipping for large orders.\n\nJira: KAN-4\n\n",
+  "base_sha": "74fa2097d5d539cff7ae515fc0251a63c216fd7a",
+  "head_sha": "a29a74ec5dc319f7aac216c2a4aec231b231e5e9",
+  "repository": "ebirdyx/shipping-demo",
+  "number": 1,
+  "url": "https://github.com/ebirdyx/shipping-demo/pull/1"
+}

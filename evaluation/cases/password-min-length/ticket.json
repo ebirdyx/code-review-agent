@@ -1,0 +1,9 @@
+{
+  "key": "BENCH-1",
+  "title": "Enforce a minimum password length",
+  "description": "Weak passwords must be refused when users sign up.",
+  "acceptance_criteria": [
+    "A password of 8 or more characters is accepted.",
+    "A password shorter than 8 characters is rejected with an error."
+  ]
+}

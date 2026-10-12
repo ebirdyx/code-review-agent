@@ -1,0 +1,8 @@
+{
+  "key": "BENCH-15",
+  "title": "Store passwords securely at registration",
+  "description": "New accounts need their password stored in the database.",
+  "acceptance_criteria": [
+    "Plain-text passwords are never stored."
+  ]
+}

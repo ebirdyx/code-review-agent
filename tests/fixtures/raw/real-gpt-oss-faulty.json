@@ -1,0 +1,25 @@
+{
+  "findings": [
+    {
+      "category": "boundary_condition",
+      "severity": "medium",
+      "file": "shop/shipping.py",
+      "line": 6,
+      "title": "Off‑by‑one error in free‑shipping threshold",
+      "explanation": "The acceptance criteria require free shipping for orders of $100 or more, but the implementation checks `if total > 100`, which excludes orders exactly equal to $100, causing them to be charged the standard shipping fee.",
+      "evidence": [
+        {
+          "source": "ticket",
+          "quote": "Orders of $100 or more ship for free."
+        },
+        {
+          "source": "code",
+          "quote": "if total > 100:"
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "No supporting code was provided, so we cannot verify that the constant SHIPPING_FEE is defined or imported correctly."
+  ]
+}

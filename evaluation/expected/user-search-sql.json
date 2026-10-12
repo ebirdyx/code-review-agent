@@ -1,0 +1,16 @@
+{
+  "case_id": "user-search-sql",
+  "group": "security",
+  "expected_findings": [
+    {
+      "category": "security",
+      "file": "users/search.py",
+      "line": 8,
+      "code_anchor": "query = f\"SELECT",
+      "description": "The name is interpolated into the SQL string, allowing SQL injection. A parameterised query must be used."
+    }
+  ],
+  "must_not_report": [],
+  "expected_limitations": [],
+  "notes": "Classic SQL injection."
+}

@@ -1,0 +1,30 @@
+{
+  "case_id": "discounted-total",
+  "created_at": "2026-10-05T00:30:28+00:00",
+  "prompt_version": "review_v1",
+  "settings": {
+    "host": "https://ollama.com",
+    "model": "gpt-oss:120b",
+    "timeout_s": 180.0,
+    "temperature": 0.0,
+    "seed": 42,
+    "num_ctx": null,
+    "num_predict": null,
+    "structured_output": true
+  },
+  "max_chars": 30000,
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [
+    "No supporting code was provided; only the diff is visible."
+  ],
+  "duration_s": 1.654153035,
+  "wall_clock_s": 1.8,
+  "prompt_tokens": 1901,
+  "completion_tokens": 574,
+  "done_reason": "stop",
+  "raw_response": "{\n  \"findings\": [\n    {\n      \"category\": \"logic_defect\",\n      \"severity\": \"high\",\n      \"file\": \"shop/pricing.py\",\n      \"line\": 11,\n      \"title\": \"Discounted total calculation is incorrect\",\n      \"explanation\": \"The function `discounted_total` returns `subtotal * discount_percent / 100`, which computes the discount amount rather than the final total after discount. According to the acceptance criteria, a 20% discount on a cart worth 200 should result in 160, but the current implementation would return 40. Likewise, a 0% discount should leave the total unchanged, but the function would return 0.\",\n      \"evidence\": [\n        {\n          \"source\": \"ticket\",\n          \"quote\": \"A 20% discount on a cart worth 200 gives a total of 160.\"\n        },\n        {\n          \"source\": \"ticket\",\n          \"quote\": \"A 0% discount leaves the total unchanged.\"\n        },\n        {\n          \"source\": \"code\",\n          \"quote\": \"return subtotal * discount_percent / 100\"\n        }\n      ]\n    }\n  ],\n  \"limitations\": []\n}",
+  "error": null
+}

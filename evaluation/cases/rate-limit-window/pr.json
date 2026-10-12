@@ -1,0 +1,4 @@
+{
+  "title": "BENCH-3: request limit check",
+  "description": "Adds is_allowed, called before serving each request."
+}

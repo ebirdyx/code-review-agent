@@ -1,0 +1,8 @@
+{
+  "key": "BENCH-14",
+  "title": "Let users download their uploaded files",
+  "description": "Users can re-download the files they uploaded earlier.",
+  "acceptance_criteria": [
+    "A user can download a file they uploaded by its file name."
+  ]
+}

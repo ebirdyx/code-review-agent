@@ -1,0 +1,9 @@
+{
+  "key": "BENCH-4",
+  "title": "Apply a percentage discount to the cart",
+  "description": "Customers with a promotion code get a percentage taken off the cart total.",
+  "acceptance_criteria": [
+    "A 20% discount on a cart worth 200 gives a total of 160.",
+    "A 0% discount leaves the total unchanged."
+  ]
+}

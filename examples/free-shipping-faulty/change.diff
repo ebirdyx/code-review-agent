@@ -1,0 +1,10 @@
+diff --git a/shop/shipping.py b/shop/shipping.py
+index 3f1c2a9..8b7d4e0 100644
+--- a/shop/shipping.py
++++ b/shop/shipping.py
+@@ -4,3 +4,5 @@
+ def shipping_cost(total: float) -> float:
+     """Return the shipping cost for an order total."""
++    if total > 100:
++        return 0.0
+     return SHIPPING_FEE

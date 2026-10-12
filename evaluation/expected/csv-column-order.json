@@ -1,0 +1,16 @@
+{
+  "case_id": "csv-column-order",
+  "group": "requirement",
+  "expected_findings": [
+    {
+      "category": "requirement_mismatch",
+      "file": "export/users_csv.py",
+      "line": 8,
+      "code_anchor": "fieldnames=[\"name\", \"id\", \"email\"]",
+      "description": "Columns are written as name, id, email, but the criteria require id, name, email."
+    }
+  ],
+  "must_not_report": [],
+  "expected_limitations": [],
+  "notes": "Column order differs from the criteria."
+}

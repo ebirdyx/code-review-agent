@@ -1,0 +1,21 @@
+{
+  "findings": [
+    {
+      "category": "security",
+      "severity": "high",
+      "file": "users/search.py",
+      "line": 8,
+      "title": "SQL injection vulnerability in find_users_by_name",
+      "explanation": "The function builds an SQL query by directly interpolating the user-provided 'name' parameter into the query string using an f-string. This allows an attacker to inject malicious SQL code, leading to potential data leakage or modification.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "query = f\"SELECT id, name, email FROM users WHERE name = '{name}'\""
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "No supporting code was provided, so we cannot assess how find_users_by_name is integrated or whether input validation is performed elsewhere."
+  ]
+}

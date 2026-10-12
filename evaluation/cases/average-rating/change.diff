@@ -1,0 +1,13 @@
+diff --git a/reviews/stats.py b/reviews/stats.py
+index 1a2b3c4..5d6e7f8 100644
+--- a/reviews/stats.py
++++ b/reviews/stats.py
+@@ -1 +1,8 @@
+ """Statistics for product reviews."""
++
++
++def average_rating(ratings: list[int]) -> float:
++    """Average star rating, or 0.0 when there are no reviews."""
++    if not ratings:
++        return 0.0
++    return sum(ratings) / (len(ratings) + 1)

@@ -1,0 +1,9 @@
+{
+  "key": "BENCH-11",
+  "title": "Validate the quantity field",
+  "description": "Customers sometimes type text in the quantity field of the order form.",
+  "acceptance_criteria": [
+    "Non-numeric quantities are rejected with a clear error message.",
+    "Numeric strings such as '3' are converted to integers."
+  ]
+}

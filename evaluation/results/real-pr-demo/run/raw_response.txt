@@ -1,0 +1,23 @@
+{
+  "findings": [
+    {
+      "category": "boundary_condition",
+      "severity": "medium",
+      "file": "shop/shipping.py",
+      "line": 6,
+      "title": "Free shipping not applied to orders exactly $100",
+      "explanation": "The ticket requires orders of $100 or more to ship for free, but the implementation only returns free shipping when total is greater than 100, excluding orders that are exactly $100.",
+      "evidence": [
+        {
+          "source": "ticket",
+          "quote": "Orders of $100 or more ship for free."
+        },
+        {
+          "source": "code",
+          "quote": "if total > 100:"
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}

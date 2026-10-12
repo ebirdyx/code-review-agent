@@ -1,0 +1,10 @@
+{
+  "case_id": "free-shipping-fixed",
+  "group": "correct",
+  "expected_findings": [],
+  "must_not_report": [
+    "Any claim that the $100 boundary is handled incorrectly."
+  ],
+  "expected_limitations": [],
+  "notes": "Correct change. Zero findings is the right answer. Any boundary or requirement-mismatch finding is a false positive."
+}

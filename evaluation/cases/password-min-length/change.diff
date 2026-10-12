@@ -1,0 +1,14 @@
+diff --git a/auth/validators.py b/auth/validators.py
+index 1a2b3c4..5d6e7f8 100644
+--- a/auth/validators.py
++++ b/auth/validators.py
+@@ -4,3 +4,9 @@
+ def validate_username(username: str) -> None:
+     if not username.strip():
+         raise ValueError("Username is required.")
++
++
++def validate_password(password: str) -> None:
++    """Check the password policy."""
++    if len(password) <= 8:
++        raise ValueError("Password is too short.")

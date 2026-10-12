@@ -1,0 +1,13 @@
+diff --git a/auth/passwords.py b/auth/passwords.py
+index 1a2b3c4..5d6e7f8 100644
+--- a/auth/passwords.py
++++ b/auth/passwords.py
+@@ -1 +1,8 @@
+ """Password storage."""
++
++import hashlib
++
++
++def hash_password(password: str) -> str:
++    """Return the value stored in the database for this password."""
++    return hashlib.md5(password.encode("utf-8")).hexdigest()

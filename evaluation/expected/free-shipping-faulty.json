@@ -1,0 +1,16 @@
+{
+  "case_id": "free-shipping-faulty",
+  "group": "boundary",
+  "expected_findings": [
+    {
+      "category": "boundary_condition",
+      "file": "shop/shipping.py",
+      "line": 6,
+      "code_anchor": "if total > 100:",
+      "description": "The condition `total > 100` excludes orders of exactly $100, but the acceptance criteria say orders of $100 or more ship for free. It should be `>=`."
+    }
+  ],
+  "must_not_report": [],
+  "expected_limitations": [],
+  "notes": "Classic off-by-one at a boundary. A good review cites both the code line and the acceptance criterion."
+}

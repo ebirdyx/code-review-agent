@@ -1,0 +1,23 @@
+{
+  "findings": [
+    {
+      "category": "requirement_mismatch",
+      "severity": "high",
+      "file": "marketing/campaigns.py",
+      "line": 6,
+      "title": "Missing opt-in check for newsletter recipients",
+      "explanation": "The function `marketing_recipients` filters users only by `not u.unsubscribed` and does not verify that users have explicitly opted in to marketing, violating acceptance criterion 1 which requires only opted‑in users to receive the newsletter.",
+      "evidence": [
+        {
+          "source": "ticket",
+          "quote": "1. Only users who explicitly opted in to marketing receive the newsletter."
+        },
+        {
+          "source": "code",
+          "quote": "return [u.email for u in users if not u.unsubscribed]"
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}

@@ -1,0 +1,14 @@
+diff --git a/orders/parsing.py b/orders/parsing.py
+index 1a2b3c4..5d6e7f8 100644
+--- a/orders/parsing.py
++++ b/orders/parsing.py
+@@ -1 +1,9 @@
+ """Parsing helpers for order forms."""
++
++
++def parse_quantity(text: str) -> int:
++    """Convert the quantity field of the order form to an integer."""
++    try:
++        return int(text)
++    except Exception:
++        return 0

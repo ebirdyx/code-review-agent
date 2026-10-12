@@ -1,0 +1,13 @@
+diff --git a/marketing/campaigns.py b/marketing/campaigns.py
+index 1a2b3c4..5d6e7f8 100644
+--- a/marketing/campaigns.py
++++ b/marketing/campaigns.py
+@@ -1,3 +1,8 @@
+ """Marketing e-mail campaigns."""
+ 
+ from accounts.models import User
++
++
++def marketing_recipients(users: list[User]) -> list[str]:
++    """E-mail addresses that should receive the monthly newsletter."""
++    return [u.email for u in users if not u.unsubscribed]

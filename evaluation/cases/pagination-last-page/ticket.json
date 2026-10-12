@@ -1,0 +1,9 @@
+{
+  "key": "BENCH-2",
+  "title": "Page numbers for catalog results",
+  "description": "The catalog shows results page by page and needs to know how many pages exist.",
+  "acceptance_criteria": [
+    "45 items with a page size of 20 produce 3 pages.",
+    "A final, partially filled page is counted."
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "reviewed_by": "",
+  "draft_by": "AI assistant (draft; a team member must confirm and set reviewed_by)",
+  "labels": {
+    "free-shipping-faulty-20261005T001251": [
+      {
+        "finding_index": 0,
+        "verdict": "tp",
+        "matches": 0,
+        "usefulness": 2,
+        "note": "Correct defect, line 6, quotes both criterion and code. Category given as requirement_mismatch instead of boundary_condition (defensible; counted as tp, category accuracy reported separately)."
+      }
+    ],
+    "free-shipping-fixed-20261005T001409": [],
+    "free-shipping-ambiguous-20261005T001503": [
+      {
+        "finding_index": 0,
+        "verdict": "fp",
+        "matches": null,
+        "usefulness": 0,
+        "note": "Rubric: hedged defect about a rule the ticket does not specify ('If the business rule intends the threshold to be inclusive'). Only code evidence, no requirement quote. The prompt forbids this; the model also listed the ambiguity as a limitation."
+      },
+      {
+        "finding_index": 1,
+        "verdict": "extra",
+        "matches": null,
+        "usefulness": 1,
+        "note": "Magic number 100: true and plausible, but not an expected defect. Not counted in precision."
+      }
+    ]
+  }
+}

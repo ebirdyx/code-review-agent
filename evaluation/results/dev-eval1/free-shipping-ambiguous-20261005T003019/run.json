@@ -1,0 +1,30 @@
+{
+  "case_id": "free-shipping-ambiguous",
+  "created_at": "2026-10-05T00:30:19+00:00",
+  "prompt_version": "review_v1",
+  "settings": {
+    "host": "https://ollama.com",
+    "model": "gpt-oss:120b",
+    "timeout_s": 180.0,
+    "temperature": 0.0,
+    "seed": 42,
+    "num_ctx": null,
+    "num_predict": null,
+    "structured_output": true
+  },
+  "max_chars": 30000,
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [
+    "No supporting code was provided; only the diff is visible."
+  ],
+  "duration_s": 1.978620207,
+  "wall_clock_s": 2.12,
+  "prompt_tokens": 1863,
+  "completion_tokens": 367,
+  "done_reason": "stop",
+  "raw_response": "{\n  \"findings\": [],\n  \"limitations\": [\n    \"The ticket does not specify the exact monetary threshold for free shipping, so it cannot be determined whether using \\\"> 100\\\" is correct or should be \\\">= 100\\\" or another value.\",\n    \"No supporting code was provided (e.g., definition of SHIPPING_FEE), so the impact of the change on the rest of the module cannot be fully assessed.\"\n  ]\n}",
+  "error": null
+}

@@ -1,0 +1,13 @@
+diff --git a/util/mathx.py b/util/mathx.py
+index 1a2b3c4..5d6e7f8 100644
+--- a/util/mathx.py
++++ b/util/mathx.py
+@@ -1 +1,8 @@
+ """Small math helpers."""
++
++
++def safe_divide(a: float, b: float) -> float | None:
++    """a / b, or None when b is zero."""
++    if b == 0:
++        return None
++    return a / b

@@ -1,0 +1,46 @@
+{
+  "status": "completed",
+  "findings": [
+    {
+      "category": "requirement_mismatch",
+      "severity": "medium",
+      "file": "auth/validators.py",
+      "line": 11,
+      "title": "Password length check rejects valid 8‑character passwords",
+      "explanation": "The ticket requires passwords of 8 or more characters to be accepted, but the implementation rejects passwords whose length is less than or equal to 8, causing valid 8‑character passwords to be incorrectly rejected.",
+      "evidence": [
+        {
+          "source": "ticket",
+          "quote": "1. A password of 8 or more characters is accepted."
+        },
+        {
+          "source": "code",
+          "quote": "if len(password) <= 8:\n    raise ValueError(\"Password is too short.\")"
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "The full surrounding code and integration points for validate_password are not provided, so we cannot assess how the function is used or whether additional validation logic exists."
+  ],
+  "error": null,
+  "run": {
+    "case_id": "password-min-length",
+    "created_at": "2026-10-05T00:30:23+00:00",
+    "prompt_version": "review_v1",
+    "model": "gpt-oss:120b",
+    "host": "https://ollama.com",
+    "duration_s": 1.312556067,
+    "prompt_tokens": 1885,
+    "completion_tokens": 405
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [
+    "No supporting code was provided; only the diff is visible."
+  ],
+  "problems": [],
+  "duplicates_removed": 0
+}

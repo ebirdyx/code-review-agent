@@ -1,0 +1,25 @@
+{
+  "findings": [
+    {
+      "category": "boundary_condition",
+      "severity": "medium",
+      "file": "shop/shipping.py",
+      "line": 6,
+      "title": "Free shipping not applied at $100 threshold",
+      "explanation": "The acceptance criteria state that orders of $100 or more should ship for free, but the implementation only returns free shipping when the total is greater than 100, excluding orders exactly equal to $100.",
+      "evidence": [
+        {
+          "source": "ticket",
+          "quote": "Orders of $100 or more ship for free."
+        },
+        {
+          "source": "code",
+          "quote": "if total > 100:"
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "The supporting code defining SHIPPING_FEE and any surrounding context was not provided, so we cannot assess other aspects of the function."
+  ]
+}

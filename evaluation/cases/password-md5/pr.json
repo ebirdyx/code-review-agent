@@ -1,0 +1,4 @@
+{
+  "title": "BENCH-15: hash_password",
+  "description": "Adds hash_password; its result is stored in the users table."
+}

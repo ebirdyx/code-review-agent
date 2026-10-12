@@ -1,0 +1,43 @@
+{
+  "status": "completed",
+  "findings": [
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "shop/shipping.py",
+      "line": 6,
+      "title": "Hard‑coded shipping threshold",
+      "explanation": "The shipping cost function uses a literal value `100` to decide when shipping is free. Hard‑coding the threshold makes the rule difficult to change and obscures its meaning; it should be defined as a named constant or configuration value.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "if total > 100:"
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "The ticket does not specify the exact monetary threshold for free shipping, so it is unclear whether using `> 100` matches the intended requirement (e.g., whether the threshold should be inclusive).",
+    "The supporting code defining `SHIPPING_FEE` and any related constants is missing, preventing verification of type consistency and default fee handling."
+  ],
+  "error": null,
+  "run": {
+    "case_id": "free-shipping-ambiguous",
+    "created_at": "2026-10-05T00:30:21+00:00",
+    "prompt_version": "review_v1",
+    "model": "gpt-oss:120b",
+    "host": "https://ollama.com",
+    "duration_s": 2.241807944,
+    "prompt_tokens": 1863,
+    "completion_tokens": 580
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [
+    "No supporting code was provided; only the diff is visible."
+  ],
+  "problems": [],
+  "duplicates_removed": 0
+}

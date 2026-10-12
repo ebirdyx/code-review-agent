@@ -1,0 +1,9 @@
+{
+  "key": "BENCH-9",
+  "title": "Retry failed uploads",
+  "description": "Uploads sometimes fail on flaky connections. Try again before giving up, but do not hammer the server.",
+  "acceptance_criteria": [
+    "An upload is attempted at most 3 times in total.",
+    "After the last failed attempt the upload is reported as failed."
+  ]
+}

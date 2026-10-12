@@ -1,0 +1,13 @@
+{
+  "case_id": "free-shipping-ambiguous",
+  "group": "ambiguous",
+  "expected_findings": [],
+  "must_not_report": [
+    "Any claim that `total > 100` violates the requirement: the ticket never states a threshold.",
+    "Any claim that the threshold of 100 is wrong, based on a number the model assumed."
+  ],
+  "expected_limitations": [
+    "The ticket does not specify the free-shipping threshold, so the boundary (and the value 100) cannot be verified against a requirement."
+  ],
+  "notes": "Tests that the reviewer does not guess requirements. Flagging the missing threshold as a limitation is the desired behaviour. Neither the ticket nor the PR description states a number."
+}

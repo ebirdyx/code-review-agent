@@ -1,0 +1,4 @@
+{
+  "title": "BENCH-2: page_count helper",
+  "description": "Adds page_count to the pagination helpers."
+}

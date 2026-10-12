@@ -1,0 +1,57 @@
+{
+  "status": "completed",
+  "findings": [
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "shop/shipping.py",
+      "line": 6,
+      "title": "Magic number used for free‑shipping threshold",
+      "explanation": "The shipping_cost function hard‑codes the threshold value 100 directly in the conditional, making it difficult to change the threshold without modifying code. This reduces maintainability and may lead to inconsistencies if the threshold needs to be updated elsewhere.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "if total > 100:"
+        }
+      ]
+    },
+    {
+      "category": "boundary_condition",
+      "severity": "low",
+      "file": "shop/shipping.py",
+      "line": 6,
+      "title": "Exclusive comparison may exclude orders exactly at the threshold",
+      "explanation": "The condition uses a strict greater‑than comparison (total > 100). If the business rule intends that orders of exactly 100 also qualify for free shipping, those orders will incorrectly be charged the standard fee.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "if total > 100:"
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "The ticket does not specify the exact monetary threshold for free shipping, so it is unclear whether the > 100 logic matches the intended requirement.",
+    "No supporting code (e.g., definition of SHIPPING_FEE or existing configuration) was provided, limiting assessment of integration correctness."
+  ],
+  "error": null,
+  "run": {
+    "case_id": "free-shipping-ambiguous",
+    "created_at": "2026-10-05T00:30:16+00:00",
+    "prompt_version": "review_v1",
+    "model": "gpt-oss:120b",
+    "host": "https://ollama.com",
+    "duration_s": 2.631305384,
+    "prompt_tokens": 1863,
+    "completion_tokens": 710
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [
+    "No supporting code was provided; only the diff is visible."
+  ],
+  "problems": [],
+  "duplicates_removed": 0
+}

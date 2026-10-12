@@ -1,0 +1,9 @@
+{
+  "key": "BENCH-7",
+  "title": "Send the newsletter only to subscribers",
+  "description": "Legal requires that we only e-mail people who agreed to receive marketing.",
+  "acceptance_criteria": [
+    "Only users who explicitly opted in to marketing receive the newsletter.",
+    "Users who unsubscribed never receive it."
+  ]
+}

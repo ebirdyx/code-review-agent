@@ -1,0 +1,16 @@
+{
+  "case_id": "load-config",
+  "group": "error_handling",
+  "expected_findings": [
+    {
+      "category": "error_handling",
+      "file": "app/config.py",
+      "line": 13,
+      "code_anchor": "with open(path, encoding=\"utf-8\") as f:",
+      "description": "A missing file raises FileNotFoundError instead of falling back to the defaults with a logged warning, as required."
+    }
+  ],
+  "must_not_report": [],
+  "expected_limitations": [],
+  "notes": "Missing error path required by the ticket."
+}

@@ -1,0 +1,4 @@
+{
+  "title": "BENCH-6: overlap detection",
+  "description": "Adds the overlaps helper used by the booking form."
+}

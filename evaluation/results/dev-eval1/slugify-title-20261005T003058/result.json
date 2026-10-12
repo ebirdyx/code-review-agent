@@ -1,0 +1,27 @@
+{
+  "status": "completed",
+  "findings": [],
+  "limitations": [
+    "The supporting code for the module was not provided, so we cannot verify that the new function integrates correctly with the rest of the codebase or that there are no naming conflicts."
+  ],
+  "error": null,
+  "run": {
+    "case_id": "slugify-title",
+    "created_at": "2026-10-05T00:30:58+00:00",
+    "prompt_version": "review_v1",
+    "model": "gpt-oss:120b",
+    "host": "https://ollama.com",
+    "duration_s": 1.784139587,
+    "prompt_tokens": 1885,
+    "completion_tokens": 411
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [
+    "No supporting code was provided; only the diff is visible."
+  ],
+  "problems": [],
+  "duplicates_removed": 0
+}

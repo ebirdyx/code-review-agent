@@ -1,0 +1,15 @@
+diff --git a/files/download.py b/files/download.py
+index 1a2b3c4..5d6e7f8 100644
+--- a/files/download.py
++++ b/files/download.py
+@@ -3,3 +3,10 @@
+ import os
+ 
+ UPLOAD_DIR = "/srv/app/uploads"
++
++
++def read_upload(filename: str) -> bytes:
++    """Return the content of an uploaded file."""
++    path = os.path.join(UPLOAD_DIR, filename)
++    with open(path, "rb") as f:
++        return f.read()

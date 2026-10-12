@@ -1,0 +1,14 @@
+diff --git a/content/slugs.py b/content/slugs.py
+index 1a2b3c4..5d6e7f8 100644
+--- a/content/slugs.py
++++ b/content/slugs.py
+@@ -1 +1,9 @@
+ """Helpers for article URLs."""
++
++import re
++
++
++def slugify(title: str) -> str:
++    """Lowercase, replace runs of non-alphanumerics with one hyphen, trim hyphens."""
++    slug = re.sub(r"[^a-z0-9]+", "-", title.lower())
++    return slug.strip("-")

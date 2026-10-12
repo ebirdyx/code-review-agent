@@ -1,0 +1,9 @@
+{
+  "key": "BENCH-3",
+  "title": "Limit API requests per user",
+  "description": "Protect the API from abuse by limiting how often a user may call it.",
+  "acceptance_criteria": [
+    "A user may make at most 5 requests per minute.",
+    "The 6th request within one minute is rejected."
+  ]
+}

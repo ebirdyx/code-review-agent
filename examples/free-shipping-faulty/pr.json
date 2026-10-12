@@ -1,0 +1,4 @@
+{
+  "title": "SHOP-42: free shipping from $100",
+  "description": "Adds free shipping for orders over the threshold. Implements SHOP-42."
+}

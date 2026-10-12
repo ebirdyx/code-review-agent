@@ -1,0 +1,9 @@
+{
+  "key": "BENCH-6",
+  "title": "Prevent double bookings",
+  "description": "Two bookings of the same room must not share any time.",
+  "acceptance_criteria": [
+    "Two bookings that share any time are detected as overlapping.",
+    "Bookings that do not share any time are not flagged."
+  ]
+}

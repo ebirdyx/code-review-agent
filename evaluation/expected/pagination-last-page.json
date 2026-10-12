@@ -1,0 +1,16 @@
+{
+  "case_id": "pagination-last-page",
+  "group": "boundary",
+  "expected_findings": [
+    {
+      "category": "boundary_condition",
+      "file": "catalog/pagination.py",
+      "line": 8,
+      "code_anchor": "return item_count // page_size",
+      "description": "Floor division drops the final partially filled page (45 items, size 20 gives 2 instead of 3). It needs a ceiling division."
+    }
+  ],
+  "must_not_report": [],
+  "expected_limitations": [],
+  "notes": "Boundary: partial last page."
+}

@@ -1,0 +1,9 @@
+{
+  "key": "BENCH-8",
+  "title": "Export users to CSV",
+  "description": "Support needs a CSV export of user accounts for their spreadsheet import.",
+  "acceptance_criteria": [
+    "The file is UTF-8 and starts with a header row.",
+    "Columns appear in the order id, name, email."
+  ]
+}

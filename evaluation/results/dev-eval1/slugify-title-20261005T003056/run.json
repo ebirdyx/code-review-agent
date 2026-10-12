@@ -1,0 +1,30 @@
+{
+  "case_id": "slugify-title",
+  "created_at": "2026-10-05T00:30:56+00:00",
+  "prompt_version": "review_v1",
+  "settings": {
+    "host": "https://ollama.com",
+    "model": "gpt-oss:120b",
+    "timeout_s": 180.0,
+    "temperature": 0.0,
+    "seed": 42,
+    "num_ctx": null,
+    "num_predict": null,
+    "structured_output": true
+  },
+  "max_chars": 30000,
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [
+    "No supporting code was provided; only the diff is visible."
+  ],
+  "duration_s": 1.851820023,
+  "wall_clock_s": 1.98,
+  "prompt_tokens": 1885,
+  "completion_tokens": 382,
+  "done_reason": "stop",
+  "raw_response": "{\n  \"findings\": [],\n  \"limitations\": [\n    \"No supporting code was provided, so we cannot verify integration or edge‑case handling beyond the slugify function itself.\",\n    \"The ticket does not specify how to handle non‑ASCII characters; the implementation only retains a‑z and 0‑9, which may be a limitation if Unicode titles are expected.\"\n  ]\n}",
+  "error": null
+}

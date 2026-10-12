@@ -1,0 +1,35 @@
+{
+  "findings": [
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "shop/shipping.py",
+      "line": 6,
+      "title": "Magic number used for free shipping threshold",
+      "explanation": "The shipping_cost function uses a hard‑coded value of 100 to decide when shipping is free. This makes the threshold difficult to change or configure and reduces code readability.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "if total > 100:"
+        }
+      ]
+    },
+    {
+      "category": "boundary_condition",
+      "severity": "medium",
+      "file": "shop/shipping.py",
+      "line": 6,
+      "title": "Exclusive comparison may exclude orders at the threshold",
+      "explanation": "The condition uses a strict greater‑than (>) check, so an order with a total exactly equal to 100 will not receive free shipping. If the business rule intends the threshold to be inclusive, this is a boundary error.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "if total > 100:"
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "The ticket does not specify the exact monetary threshold for free shipping nor whether the threshold should be inclusive, so it is unclear whether the > 100 logic matches the intended requirement."
+  ]
+}

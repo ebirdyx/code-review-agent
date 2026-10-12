@@ -1,0 +1,10 @@
+{
+  "case_id": "invoice-vat",
+  "group": "correct",
+  "expected_findings": [],
+  "must_not_report": [
+    "Any claim that the VAT rate or rounding violates the criteria."
+  ],
+  "expected_limitations": [],
+  "notes": "Correct change. Remarks about floating-point money are plausible extras."
+}

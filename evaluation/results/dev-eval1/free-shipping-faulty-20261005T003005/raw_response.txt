@@ -1,0 +1,25 @@
+{
+  "findings": [
+    {
+      "category": "boundary_condition",
+      "severity": "medium",
+      "file": "shop/shipping.py",
+      "line": 6,
+      "title": "Threshold condition excludes orders exactly $100",
+      "explanation": "The acceptance criteria state that orders of $100 or more should ship for free, but the implemented condition uses `total > 100`, which only grants free shipping for totals greater than $100. Orders with a total of exactly $100 will incorrectly be charged the standard shipping fee.",
+      "evidence": [
+        {
+          "source": "ticket",
+          "quote": "Orders of $100 or more ship for free."
+        },
+        {
+          "source": "code",
+          "quote": "if total > 100:"
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "The supporting code defining SHIPPING_FEE and any related context was not provided, so we cannot assess whether the constant is correctly defined or imported."
+  ]
+}

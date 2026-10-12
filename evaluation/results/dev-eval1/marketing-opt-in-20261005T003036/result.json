@@ -1,0 +1,42 @@
+{
+  "status": "completed",
+  "findings": [
+    {
+      "category": "requirement_mismatch",
+      "severity": "high",
+      "file": "marketing/campaigns.py",
+      "line": 6,
+      "title": "Missing opt-in check for newsletter recipients",
+      "explanation": "The function `marketing_recipients` filters users only by `not u.unsubscribed` and does not verify that users have explicitly opted in to marketing, violating acceptance criterion 1 which requires only opted‑in users to receive the newsletter.",
+      "evidence": [
+        {
+          "source": "ticket",
+          "quote": "1. Only users who explicitly opted in to marketing receive the newsletter."
+        },
+        {
+          "source": "code",
+          "quote": "return [u.email for u in users if not u.unsubscribed]"
+        }
+      ]
+    }
+  ],
+  "limitations": [],
+  "error": null,
+  "run": {
+    "case_id": "marketing-opt-in",
+    "created_at": "2026-10-05T00:30:36+00:00",
+    "prompt_version": "review_v1",
+    "model": "gpt-oss:120b",
+    "host": "https://ollama.com",
+    "duration_s": 1.323456904,
+    "prompt_tokens": 1917,
+    "completion_tokens": 422
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [],
+  "problems": [],
+  "duplicates_removed": 0
+}

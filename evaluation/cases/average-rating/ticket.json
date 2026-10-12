@@ -1,0 +1,9 @@
+{
+  "key": "BENCH-5",
+  "title": "Show the average star rating",
+  "description": "Product pages display the average of all customer star ratings.",
+  "acceptance_criteria": [
+    "Ratings 4 and 5 give an average of 4.5.",
+    "A product without ratings shows 0."
+  ]
+}

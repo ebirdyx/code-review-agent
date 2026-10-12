@@ -1,0 +1,9 @@
+{
+  "key": "BENCH-10",
+  "title": "Load settings from a config file",
+  "description": "The app reads user settings from a JSON file at start-up.",
+  "acceptance_criteria": [
+    "If the file does not exist, the defaults are used and a warning is logged.",
+    "Settings in the file override the defaults."
+  ]
+}

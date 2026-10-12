@@ -1,0 +1,16 @@
+{
+  "case_id": "discounted-total",
+  "group": "logic",
+  "expected_findings": [
+    {
+      "category": "logic_defect",
+      "file": "shop/pricing.py",
+      "line": 11,
+      "code_anchor": "return subtotal * discount_percent / 100",
+      "description": "The function returns the discount amount, not the remaining total (200 with 20% gives 40, not 160). It should return subtotal * (1 - discount_percent / 100)."
+    }
+  ],
+  "must_not_report": [],
+  "expected_limitations": [],
+  "notes": "Wrong formula. A requirement_mismatch label would also be defensible."
+}

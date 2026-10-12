@@ -1,0 +1,9 @@
+{
+  "key": "BENCH-12",
+  "title": "Handle profile service outages",
+  "description": "The profile page depends on an internal service that is sometimes down.",
+  "acceptance_criteria": [
+    "When the profile service is unreachable, the page shows a friendly error instead of crashing.",
+    "A user without a profile (HTTP 404) shows 'Profile not found'."
+  ]
+}

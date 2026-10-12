@@ -1,0 +1,16 @@
+{
+  "case_id": "download-path-traversal",
+  "group": "security",
+  "expected_findings": [
+    {
+      "category": "security",
+      "file": "files/download.py",
+      "line": 10,
+      "code_anchor": "path = os.path.join(UPLOAD_DIR, filename)",
+      "description": "The user-controlled filename is joined to the upload directory without validation, allowing path traversal (e.g. '../../etc/passwd')."
+    }
+  ],
+  "must_not_report": [],
+  "expected_limitations": [],
+  "notes": "Path traversal. The PR description says the filename comes from the URL."
+}

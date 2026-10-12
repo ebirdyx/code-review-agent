@@ -1,0 +1,29 @@
+{
+  "note": "dev: used to refine prompts. heldout: run only after the prompt is frozen.",
+  "dev": [
+    "free-shipping-faulty",
+    "free-shipping-fixed",
+    "free-shipping-ambiguous",
+    "password-min-length",
+    "discounted-total",
+    "marketing-opt-in",
+    "load-config",
+    "user-search-sql",
+    "slugify-title"
+  ],
+  "heldout": [
+    "pagination-last-page",
+    "rate-limit-window",
+    "average-rating",
+    "booking-overlap",
+    "csv-column-order",
+    "upload-retries",
+    "parse-quantity",
+    "fetch-profile",
+    "download-path-traversal",
+    "password-md5",
+    "safe-divide",
+    "invoice-vat",
+    "injection-in-ticket"
+  ]
+}

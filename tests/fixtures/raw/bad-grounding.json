@@ -1,0 +1,26 @@
+{
+  "findings": [
+    {
+      "category": "boundary_condition",
+      "severity": "medium",
+      "file": "shop/shipping.py",
+      "line": 99,
+      "title": "Threshold excludes exactly 100",
+      "explanation": "The comparison excludes exactly 100.",
+      "evidence": [
+        {"source": "code", "quote": "if total > 100:"},
+        {"source": "ticket", "quote": "Free shipping applies to every order above 50 dollars."}
+      ]
+    },
+    {
+      "category": "security",
+      "severity": "high",
+      "file": "shop/payments.py",
+      "line": 3,
+      "title": "Card number logged",
+      "explanation": "Invented finding about a file that is not part of the change.",
+      "evidence": [{"source": "code", "quote": "logger.info(card_number)"}]
+    }
+  ],
+  "limitations": []
+}

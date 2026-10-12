@@ -1,0 +1,22 @@
+{
+  "findings": [
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "shop/shipping.py",
+      "line": 6,
+      "title": "Hard‑coded shipping threshold",
+      "explanation": "The shipping cost function uses a literal value `100` to decide when shipping is free. Hard‑coding the threshold makes the rule difficult to change and obscures its meaning; it should be defined as a named constant or configuration value.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "if total > 100:"
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "The ticket does not specify the exact monetary threshold for free shipping, so it is unclear whether using `> 100` matches the intended requirement (e.g., whether the threshold should be inclusive).",
+    "The supporting code defining `SHIPPING_FEE` and any related constants is missing, preventing verification of type consistency and default fee handling."
+  ]
+}

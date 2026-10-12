@@ -1,0 +1,30 @@
+{
+  "case_id": "password-min-length",
+  "created_at": "2026-10-05T00:30:27+00:00",
+  "prompt_version": "review_v1",
+  "settings": {
+    "host": "https://ollama.com",
+    "model": "gpt-oss:120b",
+    "timeout_s": 180.0,
+    "temperature": 0.0,
+    "seed": 42,
+    "num_ctx": null,
+    "num_predict": null,
+    "structured_output": true
+  },
+  "max_chars": 30000,
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [
+    "No supporting code was provided; only the diff is visible."
+  ],
+  "duration_s": 1.82280494,
+  "wall_clock_s": 1.96,
+  "prompt_tokens": 1885,
+  "completion_tokens": 481,
+  "done_reason": "stop",
+  "raw_response": "{\n  \"findings\": [\n    {\n      \"category\": \"requirement_mismatch\",\n      \"severity\": \"medium\",\n      \"file\": \"auth/validators.py\",\n      \"line\": 11,\n      \"title\": \"Password length check rejects valid 8‑character passwords\",\n      \"explanation\": \"The ticket requires passwords of 8 or more characters to be accepted, but the implementation rejects passwords whose length is less than or **equal** to 8, causing valid 8‑character passwords to be rejected.\",\n      \"evidence\": [\n        {\n          \"source\": \"ticket\",\n          \"quote\": \"A password of 8 or more characters is accepted.\"\n        },\n        {\n          \"source\": \"ticket\",\n          \"quote\": \"A password shorter than 8 characters is rejected with an error.\"\n        },\n        {\n          \"source\": \"code\",\n          \"quote\": \"if len(password) <= 8:\"\n        }\n      ]\n    }\n  ],\n  \"limitations\": [\n    \"No supporting code was provided beyond the diff, so integration with the sign‑up flow cannot be verified.\"\n  ]\n}",
+  "error": null
+}

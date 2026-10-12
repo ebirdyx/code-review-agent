@@ -1,0 +1,9 @@
+{
+  "key": "SHOP-43",
+  "title": "Free shipping for large orders",
+  "description": "Customers who spend enough should not pay shipping. Orders below the threshold keep the standard shipping fee.",
+  "acceptance_criteria": [
+    "Large orders ship for free.",
+    "Small orders are charged the standard shipping fee."
+  ]
+}

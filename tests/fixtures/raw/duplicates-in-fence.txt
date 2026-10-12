@@ -1,0 +1,25 @@
+```json
+{
+  "findings": [
+    {
+      "category": "boundary_condition",
+      "severity": "medium",
+      "file": "shop/shipping.py",
+      "line": 6,
+      "title": "Off-by-one in threshold",
+      "explanation": "Orders of exactly 100 are charged shipping.",
+      "evidence": [{"source": "code", "quote": "if total > 100:"}]
+    },
+    {
+      "category": "boundary_condition",
+      "severity": "low",
+      "file": "shop/shipping.py",
+      "line": 6,
+      "title": "Threshold comparison should be inclusive",
+      "explanation": "Same problem, reported a second time.",
+      "evidence": [{"source": "code", "quote": "if total > 100:"}]
+    }
+  ],
+  "limitations": []
+}
+```

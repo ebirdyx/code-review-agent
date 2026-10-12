@@ -1,0 +1,9 @@
+{
+  "key": "KAN-4",
+  "title": "Free shipping for large orders",
+  "description": " Customers who spend enough should not pay shipping.\n\n Acceptance criteria:\n - Orders of $100 or more ship for free.\n - Orders under $100 are charged the standard shipping fee.",
+  "acceptance_criteria": [
+    "Orders of $100 or more ship for free.",
+    "Orders under $100 are charged the standard shipping fee."
+  ]
+}

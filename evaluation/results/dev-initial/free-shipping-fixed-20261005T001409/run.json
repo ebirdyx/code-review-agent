@@ -1,0 +1,30 @@
+{
+  "case_id": "free-shipping-fixed",
+  "created_at": "2026-10-05T00:14:09+00:00",
+  "prompt_version": "review_v1",
+  "settings": {
+    "host": "https://ollama.com",
+    "model": "gpt-oss:120b",
+    "timeout_s": 180.0,
+    "temperature": 0.0,
+    "seed": 42,
+    "num_ctx": null,
+    "num_predict": null,
+    "structured_output": true
+  },
+  "max_chars": 30000,
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [
+    "No supporting code was provided; only the diff is visible."
+  ],
+  "duration_s": 4.319491412,
+  "wall_clock_s": 4.5,
+  "prompt_tokens": 1865,
+  "completion_tokens": 429,
+  "done_reason": "stop",
+  "raw_response": "{\n  \"findings\": [],\n  \"limitations\": [\n    \"The original source code for shop/shipping.py (including the definition of SHIPPING_FEE) was not provided, so we cannot verify that SHIPPING_FEE is defined or imported correctly.\"\n  ]\n}",
+  "error": null
+}

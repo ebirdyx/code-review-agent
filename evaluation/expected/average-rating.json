@@ -1,0 +1,16 @@
+{
+  "case_id": "average-rating",
+  "group": "logic",
+  "expected_findings": [
+    {
+      "category": "logic_defect",
+      "file": "reviews/stats.py",
+      "line": 8,
+      "code_anchor": "return sum(ratings) / (len(ratings) + 1)",
+      "description": "Divides by len(ratings) + 1, so ratings 4 and 5 give 3.0 instead of 4.5."
+    }
+  ],
+  "must_not_report": [],
+  "expected_limitations": [],
+  "notes": "Wrong divisor."
+}

@@ -1,0 +1,16 @@
+{
+  "case_id": "rate-limit-window",
+  "group": "boundary",
+  "expected_findings": [
+    {
+      "category": "boundary_condition",
+      "file": "api/ratelimit.py",
+      "line": 8,
+      "code_anchor": "return requests_in_last_minute <= MAX_REQUESTS_PER_MINUTE",
+      "description": "With 5 requests already made, `<=` still allows a 6th. The comparison must be `<`."
+    }
+  ],
+  "must_not_report": [],
+  "expected_limitations": [],
+  "notes": "Boundary: the 6th request."
+}

@@ -1,0 +1,9 @@
+{
+  "key": "BENCH-18",
+  "title": "Add 20% VAT to invoice totals",
+  "description": "Invoices must show the amount including VAT.",
+  "acceptance_criteria": [
+    "A subtotal of 100 gives a total of 120.00.",
+    "The total is rounded to 2 decimals."
+  ]
+}
