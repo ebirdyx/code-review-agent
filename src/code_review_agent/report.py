@@ -58,6 +58,9 @@ def render_markdown(result: ReviewResult) -> str:
             f"- **Date (UTC):** {_line(r.created_at)}",
             f"- **Model time:** {stats}; tokens: {tokens}",
         ]
+        if result.pipeline == "multi":
+            names = ", ".join(p.name for p in result.passes)
+            out.append(f"- **Pipeline:** multi-pass ({_line(names)})")
 
     if result.status == "failed":
         err = result.error
@@ -87,6 +90,37 @@ def render_markdown(result: ReviewResult) -> str:
         out.append("**Partial coverage.** Some content was not shown to the model.")
     out += [""] + (cov_notes or ["- No missing inputs."]) + [""]
 
+    # --- what each specialist pass did (multi-pass pipeline)
+    if result.passes:
+        out += ["## Specialist passes", "", "| Pass | Status | Model time | Tokens | Result |", "|---|---|--:|--:|---|"]
+        for p in result.passes:
+            took = f"{p.duration_s:.1f} s" if p.duration_s is not None else "n/a"
+            toks = f"{p.prompt_tokens} / {p.completion_tokens}" if p.prompt_tokens is not None else "n/a"
+            detail = _line(p.message) if p.message else (
+                f"{p.findings} dismissed" if p.name == "verify" else f"{p.findings} candidate finding(s)")
+            out.append(f"| {_line(p.name)} | {p.status} | {took} | {toks} | {detail.replace('|', '/')} |")
+        out.append("")
+
+    # --- requirements checklist
+    if result.criteria:
+        crit_problems: dict[int, list[ValidationProblem]] = {}
+        for p in result.problems:
+            if p.criterion_index is not None:
+                crit_problems.setdefault(p.criterion_index, []).append(p)
+        out += ["## Requirements checklist", "",
+                "Each acceptance criterion of the ticket, with the model's verdict. "
+                "\"Cannot determine\" means the provided content did not allow a judgement.", ""]
+        for i, c in enumerate(result.criteria):
+            label = {"met": "MET", "not_met": "NOT MET", "cannot_determine": "CANNOT DETERMINE"}[c.verdict]
+            out += [f"### {c.number}. {label}: {_line(c.text)}", "", _line_wrap(c.explanation), ""]
+            for ev in c.evidence:
+                out += [f"From {ev.source}:", "", _fence(ev.quote), ""]
+            if c.file:
+                out += [f"Where: `{_line(c.file)}{':' + str(c.line) if c.line else ''}`", ""]
+            if crit_problems.get(i):
+                out += ["**Validation problems**", ""]
+                out += [f"- `{p.kind}`: {_line(p.message)}" for p in crit_problems[i]] + [""]
+
     # --- findings
     if result.status == "completed":
         out += ["## Findings", ""]
@@ -107,13 +141,25 @@ def render_markdown(result: ReviewResult) -> str:
             out += _render_finding(rank, result.findings[i], by_index.get(i, []))
 
         if result.duplicates_removed:
-            out += [f"_{result.duplicates_removed} duplicate finding(s) removed._", ""]
+            what = "merged into another finding" if result.pipeline == "multi" else "removed"
+            out += [f"_{result.duplicates_removed} duplicate finding(s) {what}._", ""]
+
+        if result.dismissed:
+            out += ["## Dismissed by verification", "",
+                    "These candidates were judged unsupported by the verification pass. They are listed "
+                    "so nothing disappears silently; the human reviewer can overrule the verifier.", ""]
+            for d in result.dismissed:
+                f = d.finding
+                where = f"{f.file}:{f.line}" if f.line else f.file
+                out.append(f"- **{_line(f.title)}** (`{_line(where)}`, found by {_line(', '.join(f.found_by) or 'a pass')}): "
+                           f"{_line(d.reason)}")
+            out.append("")
 
         if result.limitations:
             out += ["## Limitations stated by the model", ""]
             out += [f"- {_line(x)}" for x in result.limitations] + [""]
 
-        general = by_index.get(None, [])
+        general = [p for p in by_index.get(None, []) if p.criterion_index is None]
         if general:
             out += ["## Output format notes", ""] + [f"- {_line(p.message)}" for p in general] + [""]
 
@@ -145,6 +191,14 @@ def _render_finding(rank: int, f: Finding, problems: list[ValidationProblem]) ->
         f"- **Location:** `{_location(f)}`",
         f"- **Location and quotes:** "
         + ("checked against the input" if not problems else "**NOT FULLY CONFIRMED**, see below"),
+    ]
+    if f.found_by:
+        out.append(f"- **Found by:** {_line(', '.join(f.found_by))}")
+    if f.verification:
+        out.append(f"- **Verification:** {f.verification}" + (f" ({_line(f.verification_note)})" if f.verification_note else ""))
+    elif f.verification_note:
+        out.append(f"- **Verification:** not verified ({_line(f.verification_note)})")
+    out += [
         "",
         _line_wrap(f.explanation),
         "",

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field
 
@@ -15,6 +16,22 @@ from .context import DEFAULT_PROMPT_VERSION, Coverage, build_context
 from .events import EventLog
 from .model_client import ModelClient, ModelError, ModelSettings
 from .schemas import ReviewedRevision, ReviewFailure, ReviewInput, StrictModel, Ticket
+
+
+class PassRecord(StrictModel):
+    """One specialist pass of the multi-pass pipeline (compliance, defects, security, verify)."""
+
+    name: str
+    prompt_version: str
+    settings: ModelSettings
+    skipped: str | None = None  # reason, when the pass was not run
+    raw_response: str | None = None  # exactly what the model returned
+    error: ReviewFailure | None = None  # set when the model call failed
+    duration_s: float | None = None
+    wall_clock_s: float | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    done_reason: str | None = None
 
 
 class RunRecord(StrictModel):
@@ -25,6 +42,8 @@ class RunRecord(StrictModel):
     prompt_version: str
     settings: ModelSettings
     max_chars: int
+    pipeline: Literal["single", "multi"] = "single"
+    passes: list[PassRecord] = Field(default_factory=list)  # multi-pass pipeline only
     revision: ReviewedRevision | None = None  # set for pull-request reviews
     coverage: Coverage
     missing_inputs: list[str] = Field(default_factory=list)
@@ -135,4 +154,8 @@ def save_run(record: RunRecord, sent_context: str, runs_dir: Path, folder: Path 
     (folder / "context.txt").write_text(sent_context, encoding="utf-8")
     if record.raw_response is not None:
         (folder / "raw_response.txt").write_text(record.raw_response, encoding="utf-8")
+    for p in record.passes:  # multi-pass: one raw answer per specialist, handy for debugging
+        if p.raw_response is not None:
+            (folder / "passes").mkdir(exist_ok=True)
+            (folder / "passes" / f"{p.name}.raw.txt").write_text(p.raw_response, encoding="utf-8")
     return folder

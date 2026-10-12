@@ -11,11 +11,13 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .context import DEFAULT_PROMPT_VERSION
 from .events import EventLog
 from .github import GitHubClient, PullRequestSnapshot, parse_pr_reference
 from .jira import PROJECTS_ENV, JiraClient, resolve_ticket
 from .loading import load_example, save_snapshot
 from .model_client import ModelClient
+from .pipeline import MULTI_PROMPT_VERSION, run_multi
 from .report import render_markdown
 from .review import RunRecord, new_run_folder, run_review, save_result, save_run
 from .schemas import ReviewInput, ReviewResult, Ticket
@@ -125,11 +127,21 @@ def review_folder(
     client: ModelClient,
     runs_dir: Path,
     max_chars: int,
-    prompt_version: str,
+    prompt_version: str | None = None,
     events: EventLog | None = None,
     case_id: str | None = None,
+    pipeline: str = "multi",
+    passes: list[str] | None = None,
+    verify: bool = True,
+    verifier_client: ModelClient | None = None,
 ) -> tuple[Path, ReviewResult, str]:
-    """Review one example folder (a local example or a downloaded PR) and save everything."""
+    """Review one example folder (a local example or a downloaded PR) and save everything.
+
+    pipeline "multi": specialist passes (compliance, defects, security) + a verifier.
+    pipeline "single": one model call with one prompt (the baseline used for the first evaluation).
+    """
+    if pipeline not in ("single", "multi"):
+        raise ValueError(f"Unknown pipeline '{pipeline}' (choose single or multi)")
     events = events or EventLog()
     case_id = case_id or example.name
     with events.step("load_input", f"Loading {example.name}") as info:
@@ -138,5 +150,10 @@ def review_folder(
                     supporting_files=len(review_input.supporting_files))
     folder = new_run_folder(runs_dir, case_id)
     events.attach(folder / "events.jsonl")
-    record, sent = run_review(case_id, ticket, review_input, client, max_chars, prompt_version, events=events)
+    if pipeline == "multi":
+        record, sent = run_multi(case_id, ticket, review_input, client, max_chars,
+                                 prompt_version or MULTI_PROMPT_VERSION, passes, verify, verifier_client, events)
+    else:
+        record, sent = run_review(case_id, ticket, review_input, client, max_chars,
+                                  prompt_version or DEFAULT_PROMPT_VERSION, events=events)
     return finish_run(record, sent, ticket, review_input, runs_dir, folder=folder, events=events)

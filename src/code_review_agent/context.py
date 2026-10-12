@@ -21,7 +21,7 @@ from importlib import resources
 
 from pydantic import Field
 
-from .schemas import Coverage, ModelReview, ReviewInput, StrictModel, Ticket
+from .schemas import Coverage, ModelReview, ReviewInput, StrictModel, Ticket, public_schema
 
 DEFAULT_PROMPT_VERSION = "review_v1"  # change only after a dev comparison (see docs)
 DEFAULT_MAX_CHARS = 30_000  # budget for untrusted content (roughly 8k tokens)
@@ -146,7 +146,7 @@ def load_system_prompt(prompt_version: str = DEFAULT_PROMPT_VERSION) -> str:
         .joinpath(f"{prompt_version}.md")
         .read_text(encoding="utf-8")
     )
-    schema = json.dumps(ModelReview.model_json_schema(), indent=1)
+    schema = json.dumps(public_schema(ModelReview), indent=1)
     return f"{instructions}\n```json\n{schema}\n```\n"
 
 
@@ -156,11 +156,30 @@ def build_context(
     max_chars: int = DEFAULT_MAX_CHARS,
     prompt_version: str = DEFAULT_PROMPT_VERSION,
 ) -> ReviewContext:
-    """Assemble the system and user messages.
+    """Assemble the system and user messages (single-pass pipeline)."""
+    user, missing, coverage = build_user_message(ticket, review_input, max_chars)
+    return ReviewContext(
+        prompt_version=prompt_version,
+        system=load_system_prompt(prompt_version),
+        user=user,
+        missing_inputs=missing,
+        coverage=coverage,
+    )
+
+
+def build_user_message(
+    ticket: Ticket | None,
+    review_input: ReviewInput,
+    max_chars: int = DEFAULT_MAX_CHARS,
+    extra_blocks: dict[str, str] | None = None,
+) -> tuple[str, list[str], Coverage]:
+    """The user message: input status plus the fenced untrusted content.
 
     `max_chars` limits the untrusted content (ticket, PR text, diff, supporting
     code). Whole files are omitted when they do not fit; they are never cut in
     half, except long ticket / PR text which is cut with a visible marker.
+    `extra_blocks` adds more fenced blocks (the verifier uses it for candidate findings).
+    Returns (message, missing_inputs, coverage).
     """
     missing: list[str] = []
     omitted: list[str] = list(review_input.input_notes)  # what a connector could not retrieve
@@ -215,6 +234,7 @@ def build_context(
         "PULL REQUEST": pr_text,
         "DIFF": "\n".join(diff_parts),
         "SUPPORTING CODE": "\n\n".join(support_parts) or "(none provided)",
+        **(extra_blocks or {}),
     }
     # Marker id derived from the content itself, so the content cannot contain it.
     fence_id = hashlib.sha256("\x00".join(blocks.values()).encode()).hexdigest()[:8]
@@ -229,10 +249,4 @@ def build_context(
             f"<<<END UNTRUSTED {name} id={fence_id}>>>"
         )
 
-    return ReviewContext(
-        prompt_version=prompt_version,
-        system=load_system_prompt(prompt_version),
-        user="\n\n".join(sections),
-        missing_inputs=missing,
-        coverage=Coverage(complete=not omitted, omitted=omitted),
-    )
+    return "\n\n".join(sections), missing, Coverage(complete=not omitted, omitted=omitted)

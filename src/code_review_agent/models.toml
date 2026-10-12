@@ -1,0 +1,65 @@
+# Model profiles. Choose one with `--profile NAME` (or REVIEW_AGENT_PROFILE=NAME).
+# Add your own in a `models.toml` next to where you run the tool; it is merged over this file.
+#
+# provider = "ollama"            -> an Ollama server (local, or Ollama Cloud)
+# provider = "openai-compatible" -> any OpenAI-style API (OpenRouter, Together, vLLM...)
+# key_env  = NAME of the environment variable holding the API key (the key itself never goes in a file)
+# max_concurrency = how many requests the provider lets us send at once (the multi-pass
+#                   pipeline runs passes in parallel up to this number)
+# licence = licence of the model WEIGHTS (the hosting service has its own terms)
+
+default = "gpt-oss-cloud"
+
+[profiles.gpt-oss-cloud]
+provider = "ollama"
+host = "https://ollama.com"
+model = "gpt-oss:120b"
+key_env = "OLLAMA_API_KEY"
+max_concurrency = 1
+licence = "Apache-2.0"
+notes = "Ollama Cloud, free tier (1 request at a time, usage limits). Not the model named in the team plan."
+
+[profiles.gpt-oss-20b-cloud]
+provider = "ollama"
+host = "https://ollama.com"
+model = "gpt-oss:20b"
+key_env = "OLLAMA_API_KEY"
+max_concurrency = 1
+licence = "Apache-2.0"
+notes = "Smaller gpt-oss on Ollama Cloud. Can also run locally (about 14 GB)."
+
+[profiles.qwen25-coder-14b-local]
+provider = "ollama"
+host = "http://localhost:11434"
+model = "qwen2.5-coder:14b"
+num_ctx = 16384
+max_concurrency = 1
+licence = "Apache-2.0"
+notes = "The model named in the team plan. Needs `ollama pull qwen2.5-coder:14b` and a GPU or 16 GB+ of RAM. num_ctx is set because Ollama silently truncates to a small default context."
+
+[profiles.qwen25-coder-7b-local]
+provider = "ollama"
+host = "http://localhost:11434"
+model = "qwen2.5-coder:7b"
+num_ctx = 16384
+max_concurrency = 1
+licence = "Apache-2.0"
+notes = "Lighter option for an 8 GB GPU. Needs `ollama pull qwen2.5-coder:7b`."
+
+[profiles.qwen25-coder-32b-openrouter]
+provider = "openai-compatible"
+host = "https://openrouter.ai/api/v1"
+model = "qwen/qwen-2.5-coder-32b-instruct"
+key_env = "OPENROUTER_API_KEY"
+max_concurrency = 3
+licence = "Apache-2.0"
+notes = "Hosted Qwen2.5-Coder 32B. About $0.66 per million input and $1.00 per million output tokens (OpenRouter catalogue, October 2026), roughly $0.002 per review."
+
+[profiles.qwen3-coder-30b-openrouter]
+provider = "openai-compatible"
+host = "https://openrouter.ai/api/v1"
+model = "qwen/qwen3-coder-30b-a3b-instruct"
+key_env = "OPENROUTER_API_KEY"
+max_concurrency = 3
+licence = "Apache-2.0"
+notes = "Hosted Qwen3-Coder 30B (3.3B active parameters). About $0.07 per million input and $0.28 per million output tokens (OpenRouter catalogue, October 2026)."

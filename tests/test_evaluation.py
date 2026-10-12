@@ -385,7 +385,7 @@ def test_eval_run_repeats_each_case_MOCKED(tmp_path):
     server = FakeOllama(content='{"findings": [], "limitations": []}')
     try:
         code = main(["eval-run", "--cases", "free-shipping-fixed,free-shipping-faulty", "--repeat", "2",
-                     "--host", server.host, "--model", "fake", "--runs", str(tmp_path)])
+                     "--pipeline", "single", "--host", server.host, "--model", "fake", "--runs", str(tmp_path)])
     finally:
         server.close()
     assert code == 0

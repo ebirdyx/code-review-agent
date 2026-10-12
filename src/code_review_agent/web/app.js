@@ -84,7 +84,7 @@ function statusDot(status) { return el("span", { class: "dot " + status, title: 
 
 function eventTable(events) {
   if (!events.length) return el("p", { class: "hint", text: "No events recorded." });
-  const rows = events.filter((e) => e.status !== "start" || e.stage.startsWith("model")).map((e) => {
+  const rows = events.filter((e) => e.status !== "start" || e.stage.startsWith("model") || e.stage.startsWith("pass:")).map((e) => {
     const bits = [];
     if (e.seconds != null) bits.push(`${e.seconds}s`);
     const d = e.data || {};
@@ -103,10 +103,17 @@ function eventTable(events) {
 function findingCard(finding, index, triage) {
   const sev = el("span", { class: "sev " + finding.severity, text: finding.severity.toUpperCase() });
   const where = finding.line ? `${finding.file}:${finding.line}` : `${finding.file} (no line)`;
+  const badges = [];
+  if ((finding.found_by || []).length) badges.push(el("span", { class: "chip", text: "found by " + finding.found_by.join(" + ") }));
+  if (finding.verification === "supported") badges.push(el("span", { class: "chip ok", text: "verified" }));
+  else if (finding.verification === "uncertain") badges.push(el("span", { class: "chip warn", text: "verifier unsure" }));
+  else if (finding.verification_note) badges.push(el("span", { class: "chip warn", text: "not verified" }));
   const card = el("div", { class: "card" },
     el("h3", {}, sev, finding.title),
     el("div", { class: "meta", text: `${finding.category} · ${where}` }),
+    badges.length ? el("div", { class: "summary" }, badges) : null,
     el("p", {}, inline(finding.explanation)));
+  if (finding.verification_note) card.append(el("div", { class: "muted", text: "Verifier: " + finding.verification_note }));
   for (const ev of finding.evidence || []) card.append(el("div", { class: "muted", text: `Evidence from ${ev.source}:` }), el("pre", { text: ev.quote }));
   const problems = (state.detail.result.problems || []).filter((p) => p.finding_index === index);
   for (const p of problems) card.append(el("div", { class: "problem", text: `Not confirmed (${p.kind}): ${p.message}` }));
@@ -127,11 +134,53 @@ function findingCard(finding, index, triage) {
   return card;
 }
 
+const VERDICT = { met: ["MET", "ok"], not_met: ["NOT MET", "bad"], cannot_determine: ["CANNOT DETERMINE", "warn"] };
+
+function checklistView(result) {
+  if (!(result.criteria || []).length) return null;
+  const probs = (i) => (result.problems || []).filter((p) => p.criterion_index === i);
+  return el("div", {},
+    el("h2", { text: "Requirements checklist" }),
+    result.criteria.map((c, i) => {
+      const [label, cls] = VERDICT[c.verdict] || [c.verdict, ""];
+      const card = el("div", { class: "card" },
+        el("h3", {}, el("span", { class: "chip " + cls, text: label }), ` ${c.number}. ${c.text}`),
+        el("p", {}, inline(c.explanation)));
+      for (const ev of c.evidence || []) card.append(el("div", { class: "muted", text: `Evidence from ${ev.source}:` }), el("pre", { text: ev.quote }));
+      if (c.file) card.append(el("div", { class: "meta", text: `Where: ${c.file}${c.line ? ":" + c.line : ""}` }));
+      for (const p of probs(i)) card.append(el("div", { class: "problem", text: `Not confirmed (${p.kind}): ${p.message}` }));
+      return card;
+    }));
+}
+
+function passesView(result) {
+  if (!(result.passes || []).length) return null;
+  const rows = result.passes.map((p) => el("tr", {},
+    el("td", { text: p.name }), el("td", { class: "st " + (p.status === "ok" ? "done" : p.status === "failed" ? "error" : "warn"), text: p.status }),
+    el("td", { text: p.duration_s != null ? p.duration_s + " s" : "" }),
+    el("td", { text: p.prompt_tokens != null ? `${p.prompt_tokens} / ${p.completion_tokens}` : "" }),
+    el("td", { text: p.message || (p.name === "verify" ? `${p.findings} dismissed` : `${p.findings} candidate(s)`) })));
+  return el("div", {}, el("h2", { text: "Specialist passes" }),
+    el("table", {}, el("thead", {}, el("tr", {}, ["Pass", "Status", "Time", "Tokens in / out", "Result"].map((h) => el("th", { text: h })))), el("tbody", {}, rows)));
+}
+
+function dismissedView(result) {
+  if (!(result.dismissed || []).length) return null;
+  return el("div", {}, el("h2", { text: "Dismissed by verification" }),
+    el("p", { class: "muted", text: "Judged unsupported by the verifier. Listed so nothing disappears silently; you can overrule it." }),
+    result.dismissed.map((d) => el("div", { class: "card" },
+      el("h3", { text: d.finding.title }),
+      el("div", { class: "meta", text: `${d.finding.file}${d.finding.line ? ":" + d.finding.line : ""} · found by ${(d.finding.found_by || []).join(" + ")}` }),
+      el("p", { text: "Verifier: " + d.reason }))));
+}
+
 function findingsView(detail) {
   const result = detail.result;
   if (!result) return el("p", { class: "hint", text: "No result yet." });
   if (result.status === "failed") return el("div", { class: "banner bad", text: `Review failed (${result.error.kind}): ${result.error.message}` });
-  if (!result.findings.length) return el("p", { text: "No findings were reported. That is the model's claim, not a guarantee." });
+  const extras = [passesView(result), checklistView(result)];
+  if (!result.findings.length) return el("div", {}, ...extras.filter(Boolean),
+    el("p", { text: "No findings were reported. That is the model's claim, not a guarantee." }), dismissedView(result));
   const triage = {};
   for (const d of (detail.triage?.decisions || [])) triage[d.finding_index] = d;
   const reviewer = el("input", { placeholder: "Your name", value: detail.triage?.reviewer || "" });
@@ -144,10 +193,12 @@ function findingsView(detail) {
       status.textContent = `Saved ${decisions.length} decision(s) to triage.json and report-triaged.md`;
     } catch (e) { status.textContent = "Could not save: " + e.message; }
   } });
-  return el("div", {},
+  return el("div", {}, ...extras.filter(Boolean),
+    el("h2", { text: "Findings" }),
     el("p", { class: "muted", text: "You decide. Accept a finding if it is a real problem, dismiss it if not." }),
     result.findings.map((f, i) => findingCard(f, i, triage)),
-    el("div", { class: "triage" }, reviewer, save, status));
+    el("div", { class: "triage" }, reviewer, save, status),
+    dismissedView(result));
 }
 
 function rawView(detail) {
@@ -156,10 +207,13 @@ function rawView(detail) {
   const facts = [["Model", `${run.settings.model} @ ${run.settings.host}`], ["Prompt version", run.prompt_version],
     ["Temperature / seed", `${run.settings.temperature} / ${run.settings.seed}`], ["Tokens", `${run.prompt_tokens} in / ${run.completion_tokens} out`],
     ["Model time", run.duration_s != null ? run.duration_s + " s" : "n/a"], ["Finish reason", run.done_reason || "n/a"]];
+  const answers = (run.passes || []).length
+    ? run.passes.map((p) => el("div", {}, el("h2", { text: `Raw answer of pass "${p.name}"` }),
+        el("pre", { text: p.skipped ? `(skipped: ${p.skipped})` : p.error ? `(failed: ${p.error.kind}: ${p.error.message})` : p.raw_response || "(none)" })))
+    : [el("h2", { text: "Raw model response (exactly as received)" }), el("pre", { text: run.raw_response || "(none)" })];
   return el("div", {},
     el("table", {}, el("tbody", {}, facts.map(([k, v]) => el("tr", {}, el("th", { text: k }), el("td", { text: String(v) }))))),
-    el("h2", { text: "Raw model response (exactly as received)" }),
-    el("pre", { text: run.raw_response || "(none)" }));
+    answers);
 }
 
 // -------------------------------------------------------------------------- views
@@ -182,7 +236,7 @@ const $view = () => document.getElementById("view");
 function renderRunList() {
   const ul = document.getElementById("runs");
   ul.replaceChildren(...state.runs.map((r) => {
-    const sub = [r.model, r.head_sha && "commit " + r.head_sha, r.findings != null && `${r.findings} finding(s)`, r.triaged && "triaged"].filter(Boolean).join(" · ");
+    const sub = [r.model, r.pipeline === "multi" && "multi-pass", r.head_sha && "commit " + r.head_sha, r.findings != null && `${r.findings} finding(s)`, r.triaged && "triaged"].filter(Boolean).join(" · ");
     return el("li", { class: r.name === state.selected ? "sel" : "", onclick: () => selectRun(r.name) },
       el("div", { class: "title" }, statusDot(r.status), r.case_id),
       el("div", { class: "sub", text: `${r.status} · ${r.created_at.replace("T", " ").slice(0, 19)}` }),
@@ -201,7 +255,8 @@ function renderDetail() {
   else if (state.tab === "findings") body = findingsView(d);
   else if (state.tab === "timeline") body = eventTable(d.events);
   else body = rawView(d);
-  const chips = [s.model, "prompt " + s.prompt_version, s.head_sha && "commit " + s.head_sha, s.problems != null && `${s.problems} unconfirmed`].filter(Boolean);
+  const chips = [s.model, s.pipeline && s.pipeline + "-pass", "prompt " + s.prompt_version, s.head_sha && "commit " + s.head_sha,
+    s.problems != null && `${s.problems} unconfirmed`, s.dismissed ? `${s.dismissed} dismissed by verifier` : null].filter(Boolean);
   $view().replaceChildren(...[
     el("h2", { text: s.case_id }),
     el("div", { class: "summary" }, statusDot(s.status), el("strong", { text: s.status }), chips.map((c) => el("span", { class: "chip", text: c }))),

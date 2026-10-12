@@ -18,11 +18,13 @@ from __future__ import annotations
 import json
 import re
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from .context import HUNK_HEADER, render_ticket, split_diff
 from .review import RunRecord
 from .schemas import (
+    WHOLE_CHANGE,
+    FailureKind,
     Finding,
     ModelReview,
     ProblemKind,
@@ -32,7 +34,6 @@ from .schemas import (
     RunSummary,
     Ticket,
     ValidationProblem,
-    FailureKind,
 )
 
 
@@ -46,7 +47,12 @@ _FENCE = re.compile(r"^```[a-zA-Z]*\s*\n(.*?)\n?```\s*$", re.DOTALL)
 
 
 def parse_model_output(raw: str, done_reason: str | None = None) -> tuple[ModelReview, list[ValidationProblem]]:
-    """Parse and schema-validate. Returns the review and any format warnings.
+    """Single-pass review output: parse and schema-validate (see `parse_json_output`)."""
+    return parse_json_output(raw, ModelReview, done_reason)
+
+
+def parse_json_output(raw: str, model: type[BaseModel], done_reason: str | None = None):
+    """Parse and schema-validate against `model`. Returns (object, format warnings).
 
     Raises InvalidOutput with a human-readable reason otherwise.
     """
@@ -74,7 +80,7 @@ def parse_model_output(raw: str, done_reason: str | None = None) -> tuple[ModelR
         ) from exc
 
     try:
-        return ModelReview.model_validate(data), warnings
+        return model.model_validate(data), warnings
     except ValidationError as exc:
         details = "; ".join(
             f"{'.'.join(str(p) for p in err['loc']) or '(root)'}: {err['msg']}"
@@ -151,61 +157,68 @@ def _index_diff(diff: str) -> tuple[dict[str, dict[int, str]], list[str]]:
     return lines_by_file, all_text
 
 
+class Grounder:
+    """Checks cited files, lines and quotes against the input a model was given."""
+
+    def __init__(self, ticket: Ticket | None, review_input: ReviewInput):
+        self.diff_lines, diff_text = _index_diff(review_input.diff)
+        self.supporting = {s.path: s.content for s in review_input.supporting_files}
+        code = _squash("\n".join(diff_text + list(self.supporting.values())))
+        # Quotes may come from the raw ticket fields or from the rendered text the model was
+        # shown (which numbers the criteria: "1. ..."), so accept both.
+        ticket_text = (
+            _squash("\n".join([ticket.key, ticket.title, ticket.description, *ticket.acceptance_criteria,
+                               render_ticket(ticket, [])]))
+            if ticket else None
+        )
+        pr_text = _squash(f"{review_input.pr.title}\n{review_input.pr.description}")
+        self._haystacks = {"code": code, "ticket": ticket_text, "pr_description": pr_text}
+
+    def location(self, file: str | None, line: int | None) -> tuple[ProblemKind, str] | None:
+        if file is None or file == WHOLE_CHANGE:
+            return None  # a statement about the change as a whole has no file to check
+        if file in self.supporting:
+            total = len(self.supporting[file].splitlines())
+            if line is not None and line > total:
+                return ProblemKind.LINE_OUT_OF_RANGE, f"{file} has {total} lines, but line {line} is cited."
+        elif file in self.diff_lines:
+            if line is not None and line not in self.diff_lines[file]:
+                return ProblemKind.LINE_NOT_IN_DIFF, f"Line {line} of {file} is not a line shown in the diff."
+        else:
+            known = sorted(set(self.diff_lines) | set(self.supporting))
+            return ProblemKind.UNKNOWN_FILE, f"{file} is not in the provided input (known files: {', '.join(known) or 'none'})."
+        return None
+
+    def quote(self, ev) -> tuple[ProblemKind, str] | None:
+        haystack = self._haystacks[ev.source]
+        if haystack is None:
+            return ProblemKind.QUOTE_NOT_FOUND, f"Evidence cites the ticket, but no ticket was provided: \"{ev.quote}\""
+        if _squash(ev.quote) not in haystack:
+            return ProblemKind.QUOTE_NOT_FOUND, f"Quoted {ev.source} text was not found in the input: \"{ev.quote}\""
+        return None
+
+
 def check_grounding(
     findings: list[Finding], ticket: Ticket | None, review_input: ReviewInput
 ) -> list[ValidationProblem]:
-    diff_lines, diff_text = _index_diff(review_input.diff)
-    supporting = {s.path: s.content for s in review_input.supporting_files}
-
-    code_haystack = _squash("\n".join(diff_text + list(supporting.values())))
-    # Quotes may come from the raw ticket fields or from the rendered text the model was
-    # shown (which numbers the criteria: "1. ..."), so accept both.
-    ticket_haystack = (
-        _squash(
-            "\n".join(
-                [ticket.key, ticket.title, ticket.description, *ticket.acceptance_criteria,
-                 render_ticket(ticket, [])]
-            )
-        )
-        if ticket
-        else None
-    )
-    pr_haystack = _squash(f"{review_input.pr.title}\n{review_input.pr.description}")
-
+    grounder = Grounder(ticket, review_input)
     problems: list[ValidationProblem] = []
-
-    def flag(index: int, kind: ProblemKind, message: str) -> None:
-        problems.append(ValidationProblem(finding_index=index, kind=kind, message=message))
-
     for i, f in enumerate(findings):
-        # --- file and line
-        if f.file in supporting:
-            total = len(supporting[f.file].splitlines())
-            if f.line is not None and f.line > total:
-                flag(i, ProblemKind.LINE_OUT_OF_RANGE,
-                     f"{f.file} has {total} lines, but the finding cites line {f.line}.")
-        elif f.file in diff_lines:
-            if f.line is not None and f.line not in diff_lines[f.file]:
-                flag(i, ProblemKind.LINE_NOT_IN_DIFF,
-                     f"Line {f.line} of {f.file} is not a line shown in the diff.")
-        else:
-            known = sorted(set(diff_lines) | set(supporting))
-            flag(i, ProblemKind.UNKNOWN_FILE,
-                 f"{f.file} is not in the provided input (known files: {', '.join(known) or 'none'}).")
+        issues = [grounder.location(f.file, f.line), *[grounder.quote(ev) for ev in f.evidence]]
+        problems += [ValidationProblem(finding_index=i, kind=k, message=m) for k, m in filter(None, issues)]
+    return problems
 
-        # --- evidence quotes
-        for ev in f.evidence:
-            haystack = {
-                "code": code_haystack,
-                "ticket": ticket_haystack,
-                "pr_description": pr_haystack,
-            }[ev.source]
-            if haystack is None:
-                flag(i, ProblemKind.QUOTE_NOT_FOUND,
-                     f"Evidence cites the ticket, but no ticket was provided: \"{ev.quote}\"")
-            elif _squash(ev.quote) not in haystack:
-                flag(i, ProblemKind.QUOTE_NOT_FOUND,
-                     f"Quoted {ev.source} text was not found in the input: \"{ev.quote}\"")
+
+def check_criteria(checks, ticket: Ticket | None, review_input: ReviewInput) -> list[ValidationProblem]:
+    """Same checks for the rows of the requirements checklist, plus: met / not_met need evidence."""
+    grounder = Grounder(ticket, review_input)
+    problems: list[ValidationProblem] = []
+    for i, c in enumerate(checks):
+        issues = [grounder.location(c.file, c.line), *[grounder.quote(ev) for ev in c.evidence]]
+        if c.verdict in ("met", "not_met") and not any(ev.source == "code" for ev in c.evidence):
+            issues.append((ProblemKind.UNSUPPORTED_VERDICT,
+                           f"Criterion {c.number} is marked {c.verdict} without any quote from the code."))
+        problems += [ValidationProblem(criterion_index=i, kind=k, message=m) for k, m in filter(None, issues)]
     return problems
 
 
@@ -216,6 +229,10 @@ def finalize_review(
     record: RunRecord, ticket: Ticket | None, review_input: ReviewInput
 ) -> ReviewResult:
     """Build the final ReviewResult from one run record."""
+    if record.pipeline == "multi":
+        from .pipeline import assemble_multi  # imported here: pipeline builds on this module
+
+        return assemble_multi(record, ticket, review_input)
     run = RunSummary(
         revision=record.revision,
         case_id=record.case_id,

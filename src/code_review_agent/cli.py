@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import webbrowser
 from datetime import UTC, datetime
@@ -30,12 +31,14 @@ from .events import EventLog, echo_to_stderr
 from .github import GitHubClient, GitHubError
 from .jira import FIELD_ENV, JiraClient, JiraError
 from .loading import load_example, load_expected
+from .pipeline import DEFAULT_PASSES, MULTI_PROMPT_VERSION, multi_context_text
 from .service import PRFetchOptions, fetch_snapshot, finish_run, review_folder
 from .ui import UIApp, make_server
-from .model_client import DEFAULT_HOST, ModelError, ModelSettings, OllamaClient
+from .model_client import DEFAULT_HOST, ModelClient, ModelError, ModelSettings, make_client
+from .profiles import PROFILE_ENV, ProfileError, load_profiles, resolve_settings
 from .report import render_markdown
 from .review import RunRecord, run_review, save_result, save_run, sent_text
-from .schemas import ModelReview, ReviewInput, ReviewResult, Ticket
+from .schemas import FailureKind, ModelReview, ReviewInput, ReviewResult, Ticket, public_schema
 from .validation import finalize_review
 
 SCHEMAS = {
@@ -117,29 +120,84 @@ def build_context_command(example: Path, out: Path | None, max_chars: int) -> in
 
 
 def _add_model_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--host", help=f"Ollama address (default {DEFAULT_HOST}, or $OLLAMA_HOST)")
-    parser.add_argument("--model", help="model id (default gpt-oss:120b, or $OLLAMA_MODEL)")
+    parser.add_argument("--profile", help="model profile from models.toml (see `review-agent profiles`)")
+    parser.add_argument("--profiles-file", type=Path, help="extra profiles file (default: ./models.toml if present)")
+    parser.add_argument("--host", help=f"override the profile's address (default {DEFAULT_HOST}, or $OLLAMA_HOST)")
+    parser.add_argument("--model", help="override the profile's model id (or $OLLAMA_MODEL)")
     parser.add_argument("--timeout", type=float, help="seconds before giving up (default 180)")
     parser.add_argument("--temperature", type=float)
     parser.add_argument("--seed", type=int)
     parser.add_argument("--num-ctx", type=int, help="context window in tokens")
     parser.add_argument("--no-structured-output", action="store_true", help="do not send the JSON Schema")
     parser.add_argument("--max-chars", type=int, default=DEFAULT_MAX_CHARS)
-    parser.add_argument("--prompt-version", default=DEFAULT_PROMPT_VERSION,
-                        help=f"instructions file in prompts/ (default {DEFAULT_PROMPT_VERSION})")
+    parser.add_argument("--pipeline", choices=["multi", "single"], default="multi",
+                        help="multi: specialist passes + verifier (default); single: one prompt, one model call")
+    parser.add_argument("--prompt-version",
+                        help=f"prompt set to use (default: {MULTI_PROMPT_VERSION} for multi, {DEFAULT_PROMPT_VERSION} for single)")
+    parser.add_argument("--passes", help=f"multi only: comma-separated subset of {','.join(DEFAULT_PASSES)}")
+    parser.add_argument("--no-verify", action="store_true", help="multi only: skip the verification pass")
+    parser.add_argument("--verifier-profile", help="multi only: use another model profile for verification")
 
 
-def _make_client(args: argparse.Namespace) -> OllamaClient:
-    settings = ModelSettings.from_env(
-        host=args.host,
-        model=args.model,
-        timeout_s=args.timeout,
-        temperature=args.temperature,
-        seed=args.seed,
-        num_ctx=args.num_ctx,
-        structured_output=False if args.no_structured_output else None,
-    )
-    return OllamaClient(settings)
+def _pipeline_kwargs(args: argparse.Namespace) -> dict:
+    """Pipeline options for `review_folder`, from the command line."""
+    verifier = None
+    if args.verifier_profile:
+        try:
+            verifier = make_client(resolve_settings(args.verifier_profile, profiles_file=args.profiles_file))
+        except ProfileError as exc:
+            raise ModelError(FailureKind.INPUT_ERROR, str(exc)) from exc
+    return {
+        "pipeline": args.pipeline,
+        "prompt_version": args.prompt_version,
+        "passes": [p.strip() for p in args.passes.split(",") if p.strip()] if args.passes else None,
+        "verify": not args.no_verify,
+        "verifier_client": verifier,
+    }
+
+
+def _settings(args: argparse.Namespace) -> ModelSettings:
+    try:
+        return resolve_settings(
+            args.profile,
+            {
+                "host": args.host,
+                "model": args.model,
+                "timeout_s": args.timeout,
+                "temperature": args.temperature,
+                "seed": args.seed,
+                "num_ctx": args.num_ctx,
+                "structured_output": False if args.no_structured_output else None,
+            },
+            args.profiles_file,
+        )
+    except ProfileError as exc:
+        raise ModelError(FailureKind.INPUT_ERROR, str(exc)) from exc
+
+
+def _make_client(args: argparse.Namespace) -> ModelClient:
+    return make_client(_settings(args))
+
+
+def profiles_command(args: argparse.Namespace) -> int:
+    """List the model profiles, their licences and whether their API key is set (never the key)."""
+    try:
+        available = load_profiles(args.profiles_file)
+    except ProfileError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    chosen = args.profile or os.environ.get(PROFILE_ENV) or available.default
+    for name, p in sorted(available.profiles.items()):
+        mark = "*" if name == chosen else " "
+        key = "no key needed" if p.key_env is None and "ollama.com" not in p.host else (
+            f"{p.key_env or 'OLLAMA_API_KEY'}: " + ("set" if os.environ.get(p.key_env or "OLLAMA_API_KEY") else "NOT set"))
+        print(f"{mark} {name}")
+        print(f"    {p.provider}  {p.model}  @ {p.host}")
+        print(f"    licence of the weights: {p.licence or 'not stated'}   key: {key}   parallel requests: {p.max_concurrency}")
+        if p.notes:
+            print(f"    {p.notes}")
+    print(f"\n* = in use. Choose another with --profile NAME or REVIEW_AGENT_PROFILE=NAME.")
+    return 0
 
 
 def _finish(record, sent, ticket, review_input, runs_dir: Path) -> int:
@@ -163,13 +221,17 @@ def review_command(args: argparse.Namespace, events: EventLog | None = None) -> 
     try:
         folder, result, report = review_folder(
             args.example, client=client, runs_dir=args.runs, max_chars=args.max_chars,
-            prompt_version=args.prompt_version, events=events,
+            events=events, **_pipeline_kwargs(args),
         )
-    except (OSError, ValidationError) as exc:
+    except (OSError, ValidationError, ValueError) as exc:
         print(f"Cannot start review: {exc}", file=sys.stderr)
         return 1
+    except ModelError as exc:
+        print(f"[{exc.kind}] {exc.message}", file=sys.stderr)
+        return 1
     print(report)
-    print(f"Saved in {folder}: run.json, context.txt, raw_response.txt, result.json, report.md, events.jsonl")
+    answers = "passes/*.raw.txt" if result.pipeline == "multi" else "raw_response.txt"
+    print(f"Saved in {folder}: run.json, context.txt, {answers}, result.json, report.md, events.jsonl")
     return 0 if result.status == "completed" else 2
 
 
@@ -273,7 +335,11 @@ def validate_command(args: argparse.Namespace) -> int:
 
 def ui_command(args: argparse.Namespace) -> int:
     """Start the local web UI: watch reviews live, read reports, record decisions."""
-    settings = ModelSettings.from_env(host=args.host, model=args.model)
+    try:
+        settings = _settings(args)
+    except ModelError as exc:
+        print(f"[{exc.kind}] {exc.message}", file=sys.stderr)
+        return 1
 
     def start_review(ref: str, options: dict, events: EventLog) -> Path:
         client = _make_client(args)  # raises ModelError (e.g. missing key) -> shown in the UI
@@ -286,13 +352,14 @@ def ui_command(args: argparse.Namespace) -> int:
         )
         run_folder, _, _ = review_folder(
             folder, client=client, runs_dir=args.runs, max_chars=args.max_chars,
-            prompt_version=args.prompt_version, events=events,
+            events=events, **_pipeline_kwargs(args),
         )
         return run_folder
 
     app = UIApp(
         runs_dir=args.runs, start_review=start_review,
-        info={"model": settings.model, "host": settings.host, "prompt_version": args.prompt_version},
+        info={"model": settings.model, "host": settings.host, "profile": settings.profile, "pipeline": args.pipeline,
+              "prompt_version": args.prompt_version or (MULTI_PROMPT_VERSION if args.pipeline == "multi" else DEFAULT_PROMPT_VERSION)},
     )
     try:
         server = make_server(app, port=args.port)
@@ -301,7 +368,7 @@ def ui_command(args: argparse.Namespace) -> int:
         return 1
     url = f"http://127.0.0.1:{server.server_address[1]}/"
     print(f"Code Review Agent UI: {url}   (Ctrl+C to stop)")
-    print(f"  runs folder: {args.runs}   model: {settings.model} at {settings.host}")
+    print(f"  runs folder: {args.runs}   profile: {settings.profile}   model: {settings.model} at {settings.host}")
     if args.open:
         webbrowser.open(url)
     try:
@@ -351,9 +418,9 @@ def eval_run_command(args: argparse.Namespace) -> int:
             try:
                 folder, result, _ = review_folder(
                     example, client=client, runs_dir=runs_dir, max_chars=args.max_chars,
-                    prompt_version=args.prompt_version, events=EventLog(), case_id=case_id,
+                    events=EventLog(), case_id=case_id, **_pipeline_kwargs(args),
                 )
-            except (OSError, ValidationError) as exc:
+            except (OSError, ValidationError, ValueError) as exc:
                 print(f"  {case_id}: cannot load ({exc})", file=sys.stderr)
                 failures += 1
                 break
@@ -379,16 +446,20 @@ def eval_revalidate_command(args: argparse.Namespace) -> int:
         try:
             record = RunRecord.model_validate_json(run_json.read_text(encoding="utf-8"))
             ticket, review_input = load_example(find_case_dir(record.case_id, CASE_ROOTS))
-            context = build_context(
-                ticket, review_input, max_chars=record.max_chars, prompt_version=record.prompt_version
-            )
+            if record.pipeline == "multi":
+                rebuilt = multi_context_text(record, ticket, review_input)
+            else:
+                context = build_context(
+                    ticket, review_input, max_chars=record.max_chars, prompt_version=record.prompt_version
+                )
+                rebuilt = sent_text(context.system, context.user)
             saved = (folder / "context.txt").read_text(encoding="utf-8")
-            if saved != sent_text(context.system, context.user):
+            if saved != rebuilt:
                 print(f"  skipped {folder.name}: case inputs or prompt changed since this run")
                 skipped += 1
                 continue
             result = finalize_review(record, ticket, review_input)
-        except (OSError, ValidationError, EvaluationError) as exc:
+        except (OSError, ValidationError, EvaluationError, ValueError) as exc:
             print(f"  skipped {folder.name}: {exc}")
             skipped += 1
             continue
@@ -484,6 +555,10 @@ def main(argv: list[str] | None = None) -> int:
     _add_model_args(rpr)
     rpr.add_argument("--runs", type=Path, default=Path("runs"), help="where to save run folders")
 
+    prof = sub.add_parser("profiles", help="list model profiles (provider, model, licence, key set or not)")
+    prof.add_argument("--profile", help="highlight this profile")
+    prof.add_argument("--profiles-file", type=Path)
+
     uip = sub.add_parser("ui", help="start the local web UI (live progress, reports, accept/dismiss findings)")
     _add_model_args(uip)
     uip.add_argument("--runs", type=Path, default=Path("runs"), help="folder holding the run folders")
@@ -527,6 +602,8 @@ def main(argv: list[str] | None = None) -> int:
         return check_examples(args.examples, args.expected)
     if args.command == "build-context":
         return build_context_command(args.example, args.out, args.max_chars)
+    if args.command == "profiles":
+        return profiles_command(args)
     if args.command == "ui":
         return ui_command(args)
     if args.command == "fetch-ticket":
@@ -547,7 +624,7 @@ def main(argv: list[str] | None = None) -> int:
         return eval_template_command(args)
     if args.command == "eval-score":
         return eval_score_command(args)
-    print(json.dumps(SCHEMAS[args.name].model_json_schema(), indent=2))
+    print(json.dumps(public_schema(SCHEMAS[args.name]), indent=2))
     return 0
 
 

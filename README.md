@@ -18,6 +18,8 @@ modèle de langage **à poids ouverts** via Ollama, puis produit des constats st
 | Validation de la sortie (JSON, schéma, fichier, ligne, citations, doublons) | Fait, testé |
 | Rapports JSON et Markdown | Fait, testé |
 | Banc d'essai (22 cas Python, séparation dev / hold-out, précision, rappel, F1) | Fait. **Étiquettes à valider par un humain** |
+| **Pipeline multi-passes** (par défaut) : 3 spécialistes (conformité au ticket critère par critère, défauts, sécurité), fusion des doublons, puis passe de **vérification** qui peut écarter un constat (toujours visible, avec la raison) | Fait, testé (352 tests dont une exécution réelle avec `gpt-oss:120b`). **Qualité pas encore mesurée** sur le banc d'essai |
+| **Profils de modèles** (`--profile`) : Ollama local ou cloud, Qwen2.5-Coder via un service hébergé compatible OpenAI (OpenRouter) | Fait, testé avec simulation. Exécution réelle d'un profil Qwen **à faire** (nécessite une clé OpenRouter) |
 | Suivi en direct (événements dans le terminal et `events.jsonl`) et interface web locale (liste des revues, rapport, constats, chronologie, accepter / rejeter chaque constat, lancer une revue de PR) | Fait, testé (serveur réel en local, page vérifiée dans un vrai navigateur) |
 | Lecture d'une Pull Request GitHub (lecture seule, révision exacte enregistrée) | Fait, testé avec simulation et avec l'API réelle (lecture seulement) |
 | Revue d'une PR GitHub + ticket Jira liée, par le modèle | Fait et exécuté pour de vrai (PR `ebirdyx/shipping-demo#1` + `KAN-4`, `gpt-oss:120b`) : voir `evaluation/results/real-pr-demo/` |
@@ -49,12 +51,35 @@ ticket.json  pr.json  change.diff  supporting/        (ou une PR GitHub téléch
 |---|---|
 | `schemas.py` | Contrats de données (Pydantic) : ticket, entrée, constat, résultat. |
 | `context.py` | Construit le contexte. Les instructions (`prompts/review_vN.md`) sont séparées du contenu non fiable, encadré de marqueurs. Le diff reçoit des numéros de ligne. Ce qui manque ou ne tient pas dans le budget est **signalé**, jamais tronqué en silence. |
-| `model_client.py` | Adresse, modèle, délai, température, graine configurables. Erreurs classées (connexion, délai, clé, quota, modèle introuvable). |
+| `model_client.py` | Deux clients derrière la même interface : Ollama et API compatible OpenAI (via LangChain). Adresse, modèle, délai, température, graine configurables. Erreurs classées (connexion, délai, clé, quota, crédit, modèle introuvable). |
+| `profiles.py`, `models.toml` | Profils de modèles nommés et documentés (aucun secret). |
+| `pipeline.py` | Pipeline multi-passes : exécution des spécialistes, fusion, vérification, assemblage pur du résultat. |
+| `service.py`, `events.py` | Le flux de travail partagé par la ligne de commande et l'interface web, et les événements de progression. |
+| `ui.py`, `web/` | Interface web locale. |
 | `review.py` | Un appel au modèle. Conserve la réponse brute, le modèle, la version du prompt, les réglages, la révision revue. |
 | `validation.py` | Rejette un JSON invalide ou hors schéma. Vérifie que fichier, ligne et citations existent dans l'entrée. **Ne corrige jamais une localisation** : elle est signalée. |
 | `report.py` | Rapport Markdown. Un échec de revue n'est jamais présenté comme « aucun constat ». |
 | `github.py` | Lecture seule d'une PR : pagination, patchs absents, PR trop grande, vérification que la PR n'a pas changé pendant la lecture. |
 | `evaluation.py` | Étiquetage humain, précision, rappel, F1, exactitude de la ligne et de la catégorie. |
+
+### Pipeline multi-passes
+
+Un petit modèle réussit mieux une tâche étroite que « tout relire ». Chaque revue lance donc des spécialistes avec le même contenu mais des consignes différentes :
+
+| Passe | Rôle | Sortie |
+|---|---|---|
+| `compliance` | Compare le code à **chaque critère d'acceptation** du ticket (ignorée sans ticket ni critères) | Un verdict par critère : *met*, *not met* ou *cannot determine*, avec preuves citées |
+| `defects` | Erreurs de logique, cas limites, gestion d'erreurs, maintenabilité | Constats |
+| `security` | Vulnérabilités concrètes introduites par le changement | Constats |
+| `verify` | Deuxième regard indépendant sur chaque constat candidat | *supported*, *uncertain* ou *unsupported* (écarté, mais **affiché** avec la raison) |
+
+La fusion regroupe les signalements d'un même problème (même fichier et même ligne, catégories compatibles) en gardant la catégorie la plus précise, la gravité la plus haute et toutes les preuves.
+Une passe qui échoue ou renvoie une réponse inutilisable est signalée (couverture partielle) sans bloquer les autres ; si **toutes** échouent, la revue est « échouée », jamais « aucun constat ».
+Les passes tournent en parallèle dans la limite du fournisseur (`max_concurrency` du profil ; 1 pour le palier gratuit d'Ollama Cloud).
+L'assemblage du résultat est une fonction **pure** des réponses enregistrées : `eval-revalidate` peut le refaire sans rappeler le modèle.
+`--pipeline single` conserve l'ancien mode (un seul appel), utilisé pour les premiers résultats d'évaluation.
+Options : `--passes defects,security`, `--no-verify`, `--verifier-profile NOM` (un autre modèle pour la vérification).
+Coût : environ 4 fois plus de jetons qu'une seule passe (mesuré : 8171 en entrée / 1910 en sortie contre environ 1900 / 500).
 
 ### Ce que la validation prouve (et ne prouve pas)
 
@@ -100,11 +125,30 @@ Définir la clé de façon permanente sous Windows (PowerShell), puis ouvrir un 
 [Environment]::SetEnvironmentVariable("OLLAMA_API_KEY", "votre-cle", "User")
 ```
 
+### Profils de modèles
+
+`uv run review-agent profiles` liste les profils (fournisseur, modèle, licence des poids, clé définie ou non, requêtes parallèles). Le fichier `src/code_review_agent/models.toml` contient :
+
+| Profil | Modèle | Où | Licence des poids |
+|---|---|---|---|
+| `gpt-oss-cloud` (défaut) | gpt-oss:120b | Ollama Cloud (palier gratuit) | Apache-2.0 |
+| `qwen25-coder-14b-local` | Qwen2.5-Coder 14B (modèle du plan d'équipe) | Ollama local | Apache-2.0 |
+| `qwen25-coder-7b-local` | Qwen2.5-Coder 7B | Ollama local | Apache-2.0 |
+| `qwen25-coder-32b-openrouter` | Qwen2.5-Coder 32B | OpenRouter (hébergé, payant à l'usage) | Apache-2.0 |
+| `qwen3-coder-30b-openrouter` | Qwen3-Coder 30B-A3B | OpenRouter (hébergé) | Apache-2.0 |
+
+On choisit avec `--profile NOM` ou `REVIEW_AGENT_PROFILE=NOM`. Pour ajouter un modèle : un fichier `models.toml` dans le dossier courant (fusionné par-dessus) ; aucune clé n'y est écrite, seulement le **nom** de la variable d'environnement qui la contient.
+Les prix d'OpenRouter (environ 0,66 $ / 1,00 $ par million de jetons pour Qwen2.5-Coder 32B, soit environ 0,002 $ par revue simple) viennent du catalogue public d'OpenRouter en octobre 2026 : à revérifier.
+
+**Qwen hébergé** : créer un compte et une clé sur openrouter.ai, la définir (`OPENROUTER_API_KEY`), puis
+`uv run review-agent review-pr proprietaire/depot#12 --jira --profile qwen25-coder-32b-openrouter`.
+Les prompts peuvent être envoyés à des fournisseurs tiers : ne pas y envoyer de code confidentiel.
+
 ### Utiliser un modèle local (recommandé pour la reproductibilité)
 
 ```bash
 ollama pull qwen2.5-coder:14b
-uv run review-agent review examples/free-shipping-faulty --host http://localhost:11434 --model qwen2.5-coder:14b
+uv run review-agent review examples/free-shipping-faulty --profile qwen25-coder-14b-local
 ```
 
 ## Commandes
@@ -201,6 +245,8 @@ Détail : `evaluation/results/dev-eval1.md`.
 
 ## Limites connues
 
+- Le pipeline multi-passes (défaut) **n'a pas encore été évalué** sur le banc d'essai : tous les résultats chiffrés ci-dessous viennent du pipeline à une seule passe (`--pipeline single`).
+  La vérification peut aussi écarter à tort un vrai constat (il reste visible dans « Dismissed by verification »).
 - Le modèle n'est pas déterministe, même à température 0 : répéter les exécutions (`--repeat`).
 - Petit échantillon : 6 défauts sur *dev*. Les résultats sont indicatifs, pas statistiques.
 - Le budget de contexte est en **caractères**, pas en jetons. Les très gros fichiers ne sont pas fournis en entier (signalé dans le rapport).

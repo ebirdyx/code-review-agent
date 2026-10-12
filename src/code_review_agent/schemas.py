@@ -95,6 +95,24 @@ class Finding(StrictModel):
     title: str = Field(min_length=1, max_length=120)
     explanation: str = Field(min_length=1, description="What behaves wrongly, and why")
     evidence: list[Evidence] = Field(min_length=1)
+    # Filled in by our pipeline, never by the model (hidden from the schema the model sees).
+    found_by: list[str] = Field(default_factory=list)  # which specialist passes reported it
+    verification: Literal["supported", "uncertain"] | None = None  # verifier's opinion, if it ran
+    verification_note: str = ""
+
+
+INTERNAL_FINDING_FIELDS = ("found_by", "verification", "verification_note")
+WHOLE_CHANGE = "(whole change)"  # `file` value for a finding about the change as a whole
+
+
+def public_schema(model: type[BaseModel]) -> dict:
+    """JSON Schema shown to the model: our internal bookkeeping fields are removed from Finding."""
+    schema = model.model_json_schema()
+    finding = schema.get("$defs", {}).get("Finding")
+    if finding:
+        for name in INTERNAL_FINDING_FIELDS:
+            finding.get("properties", {}).pop(name, None)
+    return schema
 
 
 class ModelReview(StrictModel):
@@ -106,6 +124,44 @@ class ModelReview(StrictModel):
     """
 
     findings: list[Finding] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+
+
+# ------------------------------------------------- what the other specialist passes produce
+
+Verdict = Literal["met", "not_met", "cannot_determine"]
+
+
+class CriterionVerdict(StrictModel):
+    """The compliance pass's verdict on ONE numbered acceptance criterion."""
+
+    number: int = Field(ge=1, description="The criterion's number in the ticket's list")
+    verdict: Verdict
+    explanation: str = Field(min_length=1)
+    evidence: list[Evidence] = Field(default_factory=list)
+    file: str | None = Field(default=None, description="File where the code concerned is, if any")
+    line: int | None = Field(default=None, ge=1)
+    severity: Severity = Severity.MEDIUM  # how serious it is if the criterion is NOT met
+
+
+class ComplianceReview(StrictModel):
+    """Output of the ticket-compliance pass."""
+
+    criteria: list[CriterionVerdict] = Field(default_factory=list)
+    scope_findings: list[Finding] = Field(default_factory=list)  # changes nobody asked for
+    limitations: list[str] = Field(default_factory=list)
+
+
+class FindingVerdict(StrictModel):
+    index: int = Field(ge=1, description="The candidate finding's number")
+    verdict: Literal["supported", "unsupported", "uncertain"]
+    reason: str = Field(min_length=1)
+
+
+class VerifyReview(StrictModel):
+    """Output of the verification pass: a second look at every candidate finding."""
+
+    verdicts: list[FindingVerdict] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
 
 
@@ -140,17 +196,55 @@ class ProblemKind(StrEnum):
     LINE_OUT_OF_RANGE = "line_out_of_range"  # line beyond the end of a supporting file
     QUOTE_NOT_FOUND = "quote_not_found"  # evidence quote is not in its claimed source
     FORMAT_WARNING = "format_warning"  # output was usable but not exactly as requested
+    UNSUPPORTED_VERDICT = "unsupported_verdict"  # a met / not_met verdict without evidence
+    MISSING_VERDICT = "missing_verdict"  # the model skipped a criterion; we marked it cannot_determine
+    UNKNOWN_CRITERION = "unknown_criterion"  # a verdict for a criterion number that does not exist
 
 
 class ValidationProblem(StrictModel):
     """Something our checks could not confirm. The finding is kept, but flagged.
 
-    `finding_index` is the position in the final `findings` list (None = whole output).
+    `finding_index` is the position in the final `findings` list (None = whole output);
+    `criterion_index` (0-based) is set instead when the problem concerns a checklist row.
     """
 
     finding_index: int | None = None
+    criterion_index: int | None = None
     kind: ProblemKind
     message: str = Field(min_length=1)
+
+
+class CriterionCheck(StrictModel):
+    """One row of the requirements checklist: an acceptance criterion and what was found."""
+
+    number: int = Field(ge=1)
+    text: str  # taken from the ticket, never from the model
+    verdict: Verdict
+    explanation: str
+    evidence: list[Evidence] = Field(default_factory=list)
+    file: str | None = None
+    line: int | None = None
+    severity: Severity = Severity.MEDIUM
+
+
+class DismissedFinding(StrictModel):
+    """A candidate finding the verifier judged unsupported. Kept visible, never silently dropped."""
+
+    finding: Finding
+    reason: str
+
+
+class PassSummary(StrictModel):
+    """What one specialist pass did (shown in the report and the UI)."""
+
+    name: str
+    status: Literal["ok", "failed", "skipped"]
+    model: str = ""
+    duration_s: float | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    findings: int = 0  # candidates this pass contributed
+    message: str = ""  # why it failed or was skipped
 
 
 class ReviewedRevision(StrictModel):
@@ -198,6 +292,11 @@ class ReviewResult(StrictModel):
     missing_inputs: list[str] = Field(default_factory=list)  # noted by the context builder
     problems: list[ValidationProblem] = Field(default_factory=list)
     duplicates_removed: int = 0
+    # Multi-pass pipeline only (empty for the single-pass pipeline):
+    pipeline: str = "single"
+    passes: list[PassSummary] = Field(default_factory=list)
+    criteria: list[CriterionCheck] = Field(default_factory=list)  # requirements checklist
+    dismissed: list[DismissedFinding] = Field(default_factory=list)  # judged unsupported by the verifier
 
     @model_validator(mode="after")
     def _status_matches_content(self) -> Self:
