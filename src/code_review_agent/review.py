@@ -12,6 +12,7 @@ from pathlib import Path
 from pydantic import Field
 
 from .context import DEFAULT_PROMPT_VERSION, Coverage, build_context
+from .events import EventLog
 from .model_client import ModelClient, ModelError, ModelSettings
 from .schemas import ReviewedRevision, ReviewFailure, ReviewInput, StrictModel, Ticket
 
@@ -48,9 +49,19 @@ def run_review(
     client: ModelClient,
     max_chars: int,
     prompt_version: str = DEFAULT_PROMPT_VERSION,
+    events: EventLog | None = None,
 ) -> tuple[RunRecord, str]:
     """Returns the record and the exact context text that was sent."""
-    context = build_context(ticket, review_input, max_chars=max_chars, prompt_version=prompt_version)
+    events = events or EventLog()
+    with events.step("build_context", "Assembling the review context") as info:
+        context = build_context(ticket, review_input, max_chars=max_chars, prompt_version=prompt_version)
+        info.update(
+            prompt_version=context.prompt_version,
+            characters=len(context.system) + len(context.user),
+            missing_inputs=len(context.missing_inputs),
+            omitted=len(context.coverage.omitted),
+            ticket=ticket.key if ticket else None,
+        )
     pr = review_input.pr
     record = RunRecord(
         case_id=case_id,
@@ -67,6 +78,8 @@ def run_review(
     )
     sent = sent_text(context.system, context.user)
 
+    s = client.settings
+    events.emit("model_call", f"Asking {s.model}", status="start", model=s.model, host=s.host)
     started = datetime.now(UTC)
     try:
         response = client.complete(context.system, context.user)
@@ -79,6 +92,13 @@ def run_review(
         record.completion_tokens = response.completion_tokens
         record.done_reason = response.done_reason
     record.wall_clock_s = round((datetime.now(UTC) - started).total_seconds(), 2)
+    if record.error:
+        events.emit("model_call", f"{record.error.kind}: {record.error.message}", status="error",
+                    seconds=record.wall_clock_s, model=s.model)
+    else:
+        events.emit("model_call", f"{s.model} answered", status="done", seconds=record.wall_clock_s, model=s.model,
+                    prompt_tokens=record.prompt_tokens, completion_tokens=record.completion_tokens,
+                    done_reason=record.done_reason)
     return record, sent
 
 
@@ -88,15 +108,29 @@ def save_result(folder: Path, result_json: str, report_md: str) -> None:
     (folder / "report.md").write_text(report_md, encoding="utf-8")
 
 
-def save_run(record: RunRecord, sent_context: str, runs_dir: Path) -> Path:
-    """Write run.json, context.txt and raw_response.txt into a new folder."""
-    stamp = record.created_at.replace(":", "").replace("-", "").replace("+0000", "")[:15]
-    folder = runs_dir / f"{record.case_id}-{stamp}"
+def _create_unique_folder(runs_dir: Path, base: str) -> Path:
+    """Atomically create `runs_dir/base`, or `base-2`, `base-3`... if taken (safe across threads)."""
+    runs_dir.mkdir(parents=True, exist_ok=True)
     suffix = 1
-    while folder.exists():  # never overwrite an earlier run made in the same second
-        suffix += 1
-        folder = runs_dir / f"{record.case_id}-{stamp}-{suffix}"
-    folder.mkdir(parents=True)
+    while True:
+        folder = runs_dir / (base if suffix == 1 else f"{base}-{suffix}")
+        try:
+            folder.mkdir()  # fails if it exists: no check-then-create race
+            return folder
+        except FileExistsError:
+            suffix += 1
+
+
+def new_run_folder(runs_dir: Path, case_id: str) -> Path:
+    """Create a fresh run folder (never reusing one made in the same second)."""
+    return _create_unique_folder(runs_dir, f"{case_id}-{datetime.now(UTC).strftime('%Y%m%dT%H%M%S')}")
+
+
+def save_run(record: RunRecord, sent_context: str, runs_dir: Path, folder: Path | None = None) -> Path:
+    """Write run.json, context.txt and raw_response.txt into `folder` (or a new run folder)."""
+    if folder is None:
+        stamp = record.created_at.replace(":", "").replace("-", "").replace("+0000", "")[:15]
+        folder = _create_unique_folder(runs_dir, f"{record.case_id}-{stamp}")
     (folder / "run.json").write_text(record.model_dump_json(indent=2), encoding="utf-8")
     (folder / "context.txt").write_text(sent_context, encoding="utf-8")
     if record.raw_response is not None:

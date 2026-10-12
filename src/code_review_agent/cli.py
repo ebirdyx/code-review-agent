@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
+import webbrowser
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -26,9 +26,12 @@ from .evaluation import (
     render_scoreboard,
     score_run,
 )
-from .github import GitHubClient, GitHubError, parse_pr_reference
-from .jira import FIELD_ENV, PROJECTS_ENV, JiraClient, JiraError, resolve_ticket
-from .loading import load_example, load_expected, save_snapshot
+from .events import EventLog, echo_to_stderr
+from .github import GitHubClient, GitHubError
+from .jira import FIELD_ENV, JiraClient, JiraError
+from .loading import load_example, load_expected
+from .service import PRFetchOptions, fetch_snapshot, finish_run, review_folder
+from .ui import UIApp, make_server
 from .model_client import DEFAULT_HOST, ModelError, ModelSettings, OllamaClient
 from .report import render_markdown
 from .review import RunRecord, run_review, save_result, save_run, sent_text
@@ -139,38 +142,35 @@ def _make_client(args: argparse.Namespace) -> OllamaClient:
     return OllamaClient(settings)
 
 
-def _finish_run(record, sent, ticket, review_input, runs_dir: Path) -> tuple[Path, ReviewResult, str]:
-    """Save the run, validate the output, write result.json and report.md."""
-    folder = save_run(record, sent, runs_dir)
-    result = finalize_review(record, ticket, review_input)
-    report = render_markdown(result)
-    save_result(folder, result.model_dump_json(indent=2), report)
-    return folder, result, report
-
-
 def _finish(record, sent, ticket, review_input, runs_dir: Path) -> int:
-    folder, result, report = _finish_run(record, sent, ticket, review_input, runs_dir)
+    folder, result, report = finish_run(record, sent, ticket, review_input, runs_dir)
     print(report)
     print(f"Saved in {folder}: run.json, context.txt, raw_response.txt, result.json, report.md")
     return 0 if result.status == "completed" else 2
 
 
-def review_command(args: argparse.Namespace) -> int:
+def review_command(args: argparse.Namespace, events: EventLog | None = None) -> int:
     """Send one example to the model, validate the answer and write a report."""
+    events = events or EventLog(echo=echo_to_stderr)
     try:
-        ticket, review_input = load_example(args.example)
         client = _make_client(args)
-    except (OSError, ValidationError) as exc:
-        print(f"Cannot start review: {exc}", file=sys.stderr)
-        return 1
     except ModelError as exc:
         print(f"[{exc.kind}] {exc.message}", file=sys.stderr)
         return 1
 
     s = client.settings
     print(f"Reviewing {args.example.name} with {s.model} at {s.host} ...")
-    record, sent = run_review(args.example.name, ticket, review_input, client, args.max_chars, args.prompt_version)
-    return _finish(record, sent, ticket, review_input, args.runs)
+    try:
+        folder, result, report = review_folder(
+            args.example, client=client, runs_dir=args.runs, max_chars=args.max_chars,
+            prompt_version=args.prompt_version, events=events,
+        )
+    except (OSError, ValidationError) as exc:
+        print(f"Cannot start review: {exc}", file=sys.stderr)
+        return 1
+    print(report)
+    print(f"Saved in {folder}: run.json, context.txt, raw_response.txt, result.json, report.md, events.jsonl")
+    return 0 if result.status == "completed" else 2
 
 
 def _add_pr_args(parser: argparse.ArgumentParser) -> None:
@@ -185,26 +185,21 @@ def _add_pr_args(parser: argparse.ArgumentParser) -> None:
                         help="where fetched pull requests are saved as example folders")
 
 
-def _fetch_snapshot(args: argparse.Namespace) -> Path | None:
+def _fetch_snapshot(args: argparse.Namespace, events: EventLog | None = None) -> Path | None:
     """Download a PR (read-only) and save it as an example folder. Returns the folder."""
     try:
-        repository, number = parse_pr_reference(args.pr)
-        ticket = Ticket.model_validate_json(args.ticket.read_text(encoding="utf-8")) if args.ticket else None
-        jira_client = JiraClient() if (args.jira or args.ticket_key) and not args.ticket else None
-        snapshot = GitHubClient().fetch_pull_request(
-            repository, number, max_files=args.max_files, with_source=not args.no_source
+        options = PRFetchOptions.from_cli(
+            jira=args.jira, jira_projects=args.jira_projects, ticket_keys=args.ticket_key,
+            ticket_file=args.ticket, max_files=args.max_files, no_source=args.no_source,
+        )
+        # The lambdas look the classes up when called, so tests can substitute them on this module.
+        folder, snapshot = fetch_snapshot(
+            args.pr, args.snapshots, options,
+            github=lambda: GitHubClient(), jira=lambda: JiraClient(),
+            events=events or EventLog(echo=echo_to_stderr),
         )
         meta = snapshot.metadata
-        if jira_client:
-            projects = (args.jira_projects or os.environ.get(PROJECTS_ENV, "")).split(",")
-            resolution = resolve_ticket(jira_client, meta, [p for p in projects if p.strip()], args.ticket_key)
-            ticket = resolution.ticket
-            snapshot.notes += resolution.notes
-            snapshot.info += resolution.info
-        folder = args.snapshots / f"{repository.replace('/', '-')}-pr{number}-{meta.head_sha[:7]}"
-        save_snapshot(snapshot, folder)
-        if ticket:
-            (folder / "ticket.json").write_text(ticket.model_dump_json(indent=2), encoding="utf-8")
+        repository, number = meta.repository, meta.number
     except (GitHubError, JiraError, OSError, ValidationError, ValueError) as exc:
         print(f"Cannot fetch the pull request: {exc}", file=sys.stderr)
         return None
@@ -245,11 +240,12 @@ def fetch_pr_command(args: argparse.Namespace) -> int:
 
 
 def review_pr_command(args: argparse.Namespace) -> int:
-    folder = _fetch_snapshot(args)
+    events = EventLog(echo=echo_to_stderr)
+    folder = _fetch_snapshot(args, events)
     if folder is None:
         return 1
     args.example = folder
-    return review_command(args)
+    return review_command(args, events)
 
 
 def validate_command(args: argparse.Namespace) -> int:
@@ -273,6 +269,48 @@ def validate_command(args: argparse.Namespace) -> int:
     )
     sent = f"=== SYSTEM MESSAGE ===\n{context.system}\n=== USER MESSAGE ===\n{context.user}\n"
     return _finish(record, sent, ticket, review_input, args.runs)
+
+
+def ui_command(args: argparse.Namespace) -> int:
+    """Start the local web UI: watch reviews live, read reports, record decisions."""
+    settings = ModelSettings.from_env(host=args.host, model=args.model)
+
+    def start_review(ref: str, options: dict, events: EventLog) -> Path:
+        client = _make_client(args)  # raises ModelError (e.g. missing key) -> shown in the UI
+        keys = [options["ticket_key"]] if options.get("ticket_key") else None
+        folder, _ = fetch_snapshot(
+            ref, args.snapshots,
+            PRFetchOptions.from_cli(jira=options.get("jira", False), jira_projects=options.get("jira_projects"),
+                                    ticket_keys=keys),
+            github=lambda: GitHubClient(), jira=lambda: JiraClient(), events=events,
+        )
+        run_folder, _, _ = review_folder(
+            folder, client=client, runs_dir=args.runs, max_chars=args.max_chars,
+            prompt_version=args.prompt_version, events=events,
+        )
+        return run_folder
+
+    app = UIApp(
+        runs_dir=args.runs, start_review=start_review,
+        info={"model": settings.model, "host": settings.host, "prompt_version": args.prompt_version},
+    )
+    try:
+        server = make_server(app, port=args.port)
+    except OSError as exc:
+        print(f"Cannot listen on port {args.port}: {exc}. Try --port 8766.", file=sys.stderr)
+        return 1
+    url = f"http://127.0.0.1:{server.server_address[1]}/"
+    print(f"Code Review Agent UI: {url}   (Ctrl+C to stop)")
+    print(f"  runs folder: {args.runs}   model: {settings.model} at {settings.host}")
+    if args.open:
+        webbrowser.open(url)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nStopped.")
+    finally:
+        server.server_close()
+    return 0
 
 
 # -------------------------------------------------------------------- evaluation
@@ -304,14 +342,21 @@ def eval_run_command(args: argparse.Namespace) -> int:
     failures = 0
     for case_id in case_ids:
         try:
-            ticket, review_input = load_example(find_case_dir(case_id, CASE_ROOTS))
-        except (OSError, ValidationError, EvaluationError) as exc:
+            example = find_case_dir(case_id, CASE_ROOTS)
+        except EvaluationError as exc:
             print(f"  {case_id}: cannot load ({exc})", file=sys.stderr)
             failures += 1
             continue
         for rep in range(1, args.repeat + 1):
-            record, sent = run_review(case_id, ticket, review_input, client, args.max_chars, args.prompt_version)
-            folder, result, _ = _finish_run(record, sent, ticket, review_input, runs_dir)
+            try:
+                folder, result, _ = review_folder(
+                    example, client=client, runs_dir=runs_dir, max_chars=args.max_chars,
+                    prompt_version=args.prompt_version, events=EventLog(), case_id=case_id,
+                )
+            except (OSError, ValidationError) as exc:
+                print(f"  {case_id}: cannot load ({exc})", file=sys.stderr)
+                failures += 1
+                break
             if result.status == "completed":
                 detail = f"{len(result.findings)} finding(s), {len(result.problems)} unconfirmed"
             else:
@@ -439,6 +484,13 @@ def main(argv: list[str] | None = None) -> int:
     _add_model_args(rpr)
     rpr.add_argument("--runs", type=Path, default=Path("runs"), help="where to save run folders")
 
+    uip = sub.add_parser("ui", help="start the local web UI (live progress, reports, accept/dismiss findings)")
+    _add_model_args(uip)
+    uip.add_argument("--runs", type=Path, default=Path("runs"), help="folder holding the run folders")
+    uip.add_argument("--snapshots", type=Path, default=Path("runs/pr-snapshots"))
+    uip.add_argument("--port", type=int, default=8765)
+    uip.add_argument("--open", action="store_true", help="open the page in your browser")
+
     val = sub.add_parser("validate", help="validate raw model text from a file (no model call)")
     val.add_argument("example", type=Path, help="example folder the text is supposed to review")
     val.add_argument("raw", type=Path, help="file containing the raw model response")
@@ -475,6 +527,8 @@ def main(argv: list[str] | None = None) -> int:
         return check_examples(args.examples, args.expected)
     if args.command == "build-context":
         return build_context_command(args.example, args.out, args.max_chars)
+    if args.command == "ui":
+        return ui_command(args)
     if args.command == "fetch-ticket":
         return fetch_ticket_command(args)
     if args.command == "fetch-pr":

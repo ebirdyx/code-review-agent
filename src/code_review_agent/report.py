@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-from .schemas import Finding, ReviewResult, Severity, ValidationProblem
+from .schemas import Finding, ReviewResult, Severity, TriageFile, ValidationProblem
 
 _SEVERITY_ORDER = {Severity.CRITICAL: 0, Severity.HIGH: 1, Severity.MEDIUM: 2, Severity.LOW: 3}
 
@@ -118,6 +118,23 @@ def render_markdown(result: ReviewResult) -> str:
             out += ["## Output format notes", ""] + [f"- {_line(p.message)}" for p in general] + [""]
 
     return "\n".join(out).rstrip() + "\n"
+
+
+def render_triage_section(result: ReviewResult, triage: TriageFile) -> str:
+    """Markdown block recording what the human reviewer decided about each finding."""
+    who = _line(triage.reviewer) or "unnamed reviewer"
+    out = ["", f"## Human triage (reviewer: {who})", ""]
+    if not result.findings:
+        return "\n".join(out + ["No findings to triage.", ""])
+    by_index = {d.finding_index: d for d in triage.decisions}
+    for i, f in enumerate(result.findings):
+        d = by_index.get(i)
+        state = d.decision.upper() if d else "NOT REVIEWED"
+        note = f": {_line(d.note)}" if d and d.note.strip() else ""
+        out.append(f"- Finding {i + 1} ({_line(f.title)}): **{state}**{note}")
+    decided = sum(1 for i in range(len(result.findings)) if i in by_index)
+    out += ["", f"{decided} of {len(result.findings)} finding(s) reviewed by a human.", ""]
+    return "\n".join(out)
 
 
 def _render_finding(rank: int, f: Finding, problems: list[ValidationProblem]) -> list[str]:

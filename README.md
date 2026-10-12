@@ -18,6 +18,7 @@ modèle de langage **à poids ouverts** via Ollama, puis produit des constats st
 | Validation de la sortie (JSON, schéma, fichier, ligne, citations, doublons) | Fait, testé |
 | Rapports JSON et Markdown | Fait, testé |
 | Banc d'essai (22 cas Python, séparation dev / hold-out, précision, rappel, F1) | Fait. **Étiquettes à valider par un humain** |
+| Suivi en direct (événements dans le terminal et `events.jsonl`) et interface web locale (liste des revues, rapport, constats, chronologie, accepter / rejeter chaque constat, lancer une revue de PR) | Fait, testé (serveur réel en local, page vérifiée dans un vrai navigateur) |
 | Lecture d'une Pull Request GitHub (lecture seule, révision exacte enregistrée) | Fait, testé avec simulation et avec l'API réelle (lecture seulement) |
 | Revue d'une PR GitHub + ticket Jira liée, par le modèle | Fait et exécuté pour de vrai (PR `ebirdyx/shipping-demo#1` + `KAN-4`, `gpt-oss:120b`) : voir `evaluation/results/real-pr-demo/` |
 | Tickets Jira (lecture seule, lien PR → ticket, critères d'acceptation, tickets multiples ou indisponibles) | Fait. Testé avec simulation **et sur un vrai site Jira Cloud** (`fetch-ticket KAN-4` : critères lus dans la section de la description). Le cas « champ personnalisé » n'a été testé qu'avec simulation |
@@ -66,10 +67,10 @@ C'est le rôle du réviseur humain, et de l'étiquetage manuel dans l'évaluatio
 Prérequis : [uv](https://docs.astral.sh/uv/) (gère Python 3.12 automatiquement) et Git.
 
 ```bash
-git clone <URL-DU-DEPOT>
+git clone https://github.com/ebirdyx/code-review-agent.git
 cd code-review-agent
 uv sync
-uv run pytest -q          # 160+ tests, aucun ne nécessite de modèle ni de réseau
+uv run pytest -q          # 260+ tests, aucun ne nécessite de modèle ni de réseau
 uv run review-agent check-examples
 ```
 
@@ -109,6 +110,9 @@ uv run review-agent review examples/free-shipping-faulty --host http://localhost
 ## Commandes
 
 ```bash
+# 0. Interface web (voir la section plus bas)
+uv run review-agent ui --open
+
 # 1. Sans modèle
 uv run review-agent build-context examples/free-shipping-faulty --out out/contexte.txt
 uv run review-agent validate examples/free-shipping-faulty tests/fixtures/raw/malformed.txt
@@ -134,6 +138,23 @@ révision revue, durées), `context.txt` (le texte exact envoyé), `raw_response
 `result.json` (résultat validé) et `report.md` (rapport).
 Une PR téléchargée est enregistrée comme dossier d'exemple dans `runs/pr-snapshots/` : on peut la
 rejouer hors ligne avec `review`, à la révision exacte (`head_sha`) qui a été lue.
+
+## Interface web locale
+
+```bash
+uv run review-agent ui --open        # http://127.0.0.1:8765/
+```
+
+- **Liste des revues** (en cours, terminées, échouées) qui se met à jour seule.
+- **Lancer une revue** : saisir `proprietaire/depot#12`, cocher « Jira ticket » au besoin, puis « Review this PR ». La chronologie montre chaque étape en direct :
+  lecture de la PR, lecture du ticket, construction du contexte, appel du modèle (durée, jetons), validation, rapport.
+- **Rapport**, **constats** (avec preuves et problèmes de validation), **chronologie**, **réponse brute** du modèle.
+- **Décision humaine** : chaque constat peut être *accepté* ou *rejeté* avec une note. Le résultat est enregistré dans `triage.json` et `report-triaged.md`
+  (le rapport original n'est jamais modifié).
+
+Le serveur n'écoute que sur `127.0.0.1`. Il refuse les requêtes dont l'hôte ou l'origine sont inattendus, exige un en-tête propre à l'interface pour toute écriture,
+valide les noms de dossiers (pas de remontée de chemin) et applique une politique CSP stricte. La page n'insère jamais de texte du modèle, du ticket ou de la PR comme HTML.
+La clé `OLLAMA_API_KEY` doit être définie dans le terminal où l'on lance `ui` (le modèle et l'adresse se règlent avec les mêmes options que `review`).
 
 ## Jira
 

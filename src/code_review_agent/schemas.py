@@ -211,6 +211,29 @@ class ReviewResult(StrictModel):
         return self
 
 
+# ------------------------------------------------------------------------- triage
+# The human reviewer's decision on each finding. Saved next to the run as triage.json.
+
+
+class TriageDecision(StrictModel):
+    finding_index: int = Field(ge=0)
+    decision: Literal["accepted", "dismissed"]
+    note: str = Field(default="", max_length=1000)
+
+
+class TriageFile(StrictModel):
+    reviewer: str = Field(default="", max_length=100)
+    updated_at: str = ""
+    decisions: list[TriageDecision] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _one_decision_per_finding(self) -> Self:
+        indices = [d.finding_index for d in self.decisions]
+        if len(indices) != len(set(indices)):
+            raise ValueError("two decisions for the same finding")
+        return self
+
+
 # ---------------------------------------------------------------- expected answers
 # Written by humans, stored OUTSIDE the examples folder, never shown to the model.
 

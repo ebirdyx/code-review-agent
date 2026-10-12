@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Code Review Agent</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="brand"><h1>Code Review Agent</h1><span id="cfg" class="muted"></span></div>
+    <form id="new-review" autocomplete="off">
+      <input id="pr" placeholder="owner/repo#12  or  PR URL" size="34" required>
+      <label class="check"><input type="checkbox" id="jira"> Jira ticket</label>
+      <input id="projects" placeholder="Jira projects, e.g. KAN" size="16">
+      <button id="start" type="submit">Review this PR</button>
+    </form>
+  </header>
+  <main>
+    <aside>
+      <h2>Runs</h2>
+      <ul id="runs"></ul>
+    </aside>
+    <section id="view"></section>
+  </main>
+</body>
+</html>
