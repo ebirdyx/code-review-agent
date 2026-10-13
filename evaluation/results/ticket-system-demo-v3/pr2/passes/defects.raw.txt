@@ -1,0 +1,23 @@
+{
+  "findings": [
+    {
+      "category": "boundary_condition",
+      "severity": "medium",
+      "file": "tickets/service.py",
+      "line": 50,
+      "title": "Escalation condition excludes tickets exactly 48 hours old",
+      "explanation": "The code uses a strict greater-than comparison (`now - ticket.created_at > ESCALATION_AGE`) to decide whether a ticket should be escalated. The acceptance criteria require tickets that are \"48 hours or more\" old to be escalated, so tickets that are exactly 48 hours old are incorrectly left unchanged. This off‑by‑one boundary can cause tickets to miss the required priority increase.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "ESCALATION_AGE = timedelta(hours=48)"
+        },
+        {
+          "source": "code",
+          "quote": "if now - ticket.created_at > ESCALATION_AGE:"
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}

@@ -1,0 +1,23 @@
+{
+  "findings": [
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tests/test_service.py",
+      "line": 64,
+      "title": "Rule: test boundary value missing",
+      "explanation": "The new behavior escalates tickets older than 48 hours, but the added tests do not include a test for the exact boundary value of 48 hours, violating the rule that every change in behaviour must be tested at its boundary values.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def test_an_old_open_ticket_is_escalated_one_level(service):\n    ticket = aged(service, 72)\n    assert [t.id for t in service.escalate_stale(NOW)] == [ticket.id]\n    assert service.get(ticket.id).priority is Priority.HIGH"
+        },
+        {
+          "source": "rules",
+          "quote": "Every change in behaviour comes with a test, including the boundary values (for example \"exactly 48 hours\")."
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}

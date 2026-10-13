@@ -1,0 +1,23 @@
+{
+  "findings": [
+    {
+      "category": "logic_defect",
+      "severity": "medium",
+      "file": "tickets/service.py",
+      "line": 41,
+      "title": "Whitespace in assignee names is not normalized, causing mismatched searches",
+      "explanation": "The `assign` method stores the assignee string as‑is, while `find_by_assignee` strips whitespace from the search term before querying. If an assignee is saved with leading or trailing spaces, a subsequent search for the same name (without spaces) will not match, leading to incorrect empty results.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def assign(self, ticket_id: int, assignee: str) -> Ticket:\n        ticket = self.get(ticket_id)\n        ticket.assignee = assignee\n        self.store.save(ticket)\n        return ticket"
+        },
+        {
+          "source": "code",
+          "quote": "def find_by_assignee(self, name: str) -> list[Ticket]:\n        \"\"\"Tickets assigned to `name` (case does not matter); empty if nobody matches.\"\"\"\n        return self.store.search_assignee(name.strip())"
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}

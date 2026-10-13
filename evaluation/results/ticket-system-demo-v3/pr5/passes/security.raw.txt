@@ -1,0 +1,19 @@
+{
+  "findings": [
+    {
+      "category": "security",
+      "severity": "medium",
+      "file": "tickets/service.py",
+      "line": 39,
+      "title": "Missing authorization check on ticket assignment",
+      "explanation": "The `assign` method updates the ticket's assignee without verifying that the caller is authorized to perform the assignment, allowing any user to reassign tickets arbitrarily.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def assign(self, ticket_id: int, assignee: str) -> Ticket:\n        ticket = self.get(ticket_id)\n        ticket.assignee = assignee\n        self.store.save(ticket)\n        if self.notifier:\n            try:\n                self.notifier(assignee, f\"Ticket {ticket.id} was assigned to you: {ticket.title}\")\n            except Exception:\n                pass\n        return ticket"
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}

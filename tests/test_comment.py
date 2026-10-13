@@ -203,3 +203,15 @@ def test_post_comment_needs_to_know_which_pull_request(tmp_path, capsys):
     local = result(run=RunSummary(case_id="c", created_at="t", prompt_version="p", model="m", host="h"))
     assert cli._publish_comment(Args(True), tmp_path, local) is False
     assert "does not identify a pull request" in capsys.readouterr().err
+
+
+def test_a_met_criterion_that_a_finding_disagrees_with_carries_a_note():
+    from code_review_agent.schemas import ProblemKind, ValidationProblem
+
+    r = result(findings=[finding()], criteria=[
+        CriterionCheck(number=1, text="Orders of $100 or more ship free.", verdict="met", explanation="x"),
+        CriterionCheck(number=2, text="Under $100 pays the fee.", verdict="met", explanation="y")],
+        problems=[ValidationProblem(criterion_index=0, kind=ProblemKind.INCONSISTENT_VERDICT, message="m")])
+    text = render_pr_comment(r)
+    assert "| 1 | Orders of $100 or more ship free. | MET (check: a finding disagrees) |" in text
+    assert "| 2 | Under $100 pays the fee. | MET |" in text

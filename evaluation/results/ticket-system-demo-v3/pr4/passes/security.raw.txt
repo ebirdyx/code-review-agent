@@ -1,0 +1,27 @@
+{
+  "findings": [
+    {
+      "category": "security",
+      "severity": "low",
+      "file": "tickets/service.py",
+      "line": 44,
+      "title": "Authorization check allows reporter to resolve tickets and ignores admin list",
+      "explanation": "The resolve method permits the ticket reporter to resolve a ticket, which is not intended by the acceptance criteria, and it completely ignores the `admins` parameter, so administrators cannot resolve tickets unless they are also the assignee or reporter, leading to improper authorization enforcement.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def resolve(self, ticket_id: int, actor: str, admins: frozenset[str] = frozenset()) -> Ticket:"
+        },
+        {
+          "source": "code",
+          "quote": "if actor != ticket.assignee and actor != ticket.reporter:"
+        },
+        {
+          "source": "code",
+          "quote": "raise PermissionError(f\"{actor} cannot resolve ticket {ticket_id}\")"
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}

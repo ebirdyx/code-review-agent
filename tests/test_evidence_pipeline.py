@@ -214,8 +214,10 @@ def test_standards_pass_runs_when_rules_exist_and_its_finding_cites_the_rule():
                                                                 "verify": j(verdicts=[{"index": 1, "verdict": "supported", "reason": "ok"}])},
                                              rules=RULES)
     assert "standards" in client.called()
-    f = next(f for f in result.findings if f.found_by == ["standards"])
-    assert {e.source for e in f.evidence} == {"code", "rules"} and f.verification == "supported"
+    f = next(f for f in result.findings if "standards" in f.found_by)
+    # The rule finding sits on the same line as a Bandit finding, so both are one finding. A tool-backed finding is not
+    # put to the verifier's vote, so it carries no verdict; the rule's own words and the code are both kept as evidence.
+    assert {e.source for e in f.evidence} == {"code", "rules"} and f.source == "tool" and "bandit" in f.found_by
     assert result.problems == []  # the rule quote really is in the rules; the code quote really is in the file
     assert "<<<BEGIN UNTRUSTED TEAM RULES" in sent and "from rules.md" in sent and RULE_QUOTE in sent
 

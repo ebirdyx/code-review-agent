@@ -1,0 +1,68 @@
+{
+  "criteria": [
+    {
+      "number": 1,
+      "verdict": "not_met",
+      "explanation": "The ticket requires escalation for tickets that have existed for 48 hours **or more**, but the implementation uses a strict greater‑than comparison (`> ESCALATION_AGE`). Tickets exactly 48 hours old will not be escalated, violating the acceptance criterion.",
+      "evidence": [
+        {
+          "source": "ticket",
+          "quote": "1. An open ticket that has existed for 48 hours or more is raised by one priority level."
+        },
+        {
+          "source": "code",
+          "quote": "if now - ticket.created_at > ESCALATION_AGE:"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 50,
+      "severity": "medium"
+    },
+    {
+      "number": 2,
+      "verdict": "met",
+      "explanation": "Urgent tickets have the highest priority in `PRIORITY_ORDER`. The code only increments priority when the current index is less than the last index, so an urgent ticket (last in the list) is never raised to a higher level.",
+      "evidence": [
+        {
+          "source": "ticket",
+          "quote": "2. An urgent ticket stays urgent."
+        },
+        {
+          "source": "code",
+          "quote": "if index < len(PRIORITY_ORDER) - 1:\n    ticket.priority = PRIORITY_ORDER[index + 1]"
+        },
+        {
+          "source": "code",
+          "quote": "assert service.escalate_stale(NOW) == []\nassert service.get(ticket.id).priority is Priority.URGENT"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 51,
+      "severity": "medium"
+    },
+    {
+      "number": 3,
+      "verdict": "met",
+      "explanation": "The escalation routine iterates only over tickets returned by `self.store.list_by_status(Status.OPEN)`, so tickets that are not open are never considered for escalation.",
+      "evidence": [
+        {
+          "source": "ticket",
+          "quote": "3. Tickets that are not open (in progress, resolved, closed) are never escalated."
+        },
+        {
+          "source": "code",
+          "quote": "for ticket in self.store.list_by_status(Status.OPEN):"
+        },
+        {
+          "source": "code",
+          "quote": "service.change_status(ticket.id, Status.IN_PROGRESS)\nassert service.escalate_stale(NOW) == []"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 49,
+      "severity": "medium"
+    }
+  ],
+  "scope_findings": [],
+  "limitations": []
+}

@@ -1,0 +1,59 @@
+{
+  "findings": [
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/service.py",
+      "line": 43,
+      "title": "Rule: Public functions have type hints and a one-line docstring that says what they return or raise",
+      "explanation": "The public method `add_comment` has a type hint but its one-line docstring mentions only the raised exception and does not state what the function returns, violating the rule that docstrings must say what they return or raise.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "\"\"\"Add a comment to an existing ticket. Raises ValueError if it is empty or longer than MAX_COMMENT.\"\"\""
+        },
+        {
+          "source": "rules",
+          "quote": "Public functions have type hints and a one-line docstring that says what they return or raise."
+        }
+      ]
+    },
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/service.py",
+      "line": 53,
+      "title": "Rule: Public functions have type hints and a one-line docstring that says what they return or raise",
+      "explanation": "The public method `comments` has a type hint but its docstring does not mention the return value, violating the rule that docstrings must state what they return or raise.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "\"\"\"Comments of a ticket, oldest first.\"\"\""
+        },
+        {
+          "source": "rules",
+          "quote": "Public functions have type hints and a one-line docstring that says what they return or raise."
+        }
+      ]
+    },
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/store.py",
+      "line": 87,
+      "title": "Rule: Public functions have type hints and a one-line docstring that says what they return or raise",
+      "explanation": "The public method `list_comments` has a type hint but its docstring does not specify the return value, violating the rule that docstrings must indicate what they return or raise.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "\"\"\"Comments of a ticket, oldest first.\"\"\""
+        },
+        {
+          "source": "rules",
+          "quote": "Public functions have type hints and a one-line docstring that says what they return or raise."
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}

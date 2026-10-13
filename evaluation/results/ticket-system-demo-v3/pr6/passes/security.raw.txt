@@ -1,0 +1,19 @@
+{
+  "findings": [
+    {
+      "category": "security",
+      "severity": "medium",
+      "file": "tickets/service.py",
+      "line": 43,
+      "title": "Missing authorization check for setting ticket due date",
+      "explanation": "The `set_due_date` method allows any caller to modify a ticket's due date without verifying the caller's permissions, enabling unauthorized users to alter ticket deadlines.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def set_due_date(self, ticket_id: int, due: date | None) -> Ticket:\n    \"\"\"Set or clear the due date of a ticket.\"\"\"\n    ticket = self.get(ticket_id)\n    ticket.due_date = due\n    self.store.save(ticket)\n    return ticket"
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}

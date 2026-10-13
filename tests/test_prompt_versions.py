@@ -72,3 +72,30 @@ def test_revalidate_uses_the_prompt_version_of_the_run(tmp_path):
     # And a v1 run in the same folder is still fine.
     write_run(tmp_path / "v1")
     assert main(["eval-revalidate", str(tmp_path)]) == 0
+
+
+# ---------------------------------------------------------------------------- multi_v3
+
+
+def test_multi_v3_is_the_default_and_v2_stays_loadable_and_unchanged():
+    from code_review_agent.pipeline import MULTI_PROMPT_VERSION, available_multi_versions, load_pass_system
+
+    assert MULTI_PROMPT_VERSION == "multi_v3"
+    assert {"multi_v1", "multi_v2", "multi_v3"} <= set(available_multi_versions())
+    # Old runs must stay reproducible: the new guidance exists only in v3.
+    assert "satisfies the rule in substance" not in load_pass_system("multi_v2", "standards")
+    assert "Vague criteria" not in load_pass_system("multi_v2", "compliance")
+    assert "outside your scope" not in load_pass_system("multi_v2", "verify")
+
+
+def test_multi_v3_adds_the_three_guidance_texts_and_keeps_the_rest():
+    from code_review_agent.pipeline import load_pass_system
+
+    standards = load_pass_system("multi_v3", "standards")
+    assert "satisfies the rule in substance" in standards and "TEAM RULES" in standards and '"rules"' in standards
+    compliance = load_pass_system("multi_v3", "compliance")
+    assert "Vague criteria" in compliance and "cannot_determine" in compliance and "Read numbers and operators literally" in compliance
+    verify = load_pass_system("multi_v3", "verify")
+    assert "Never answer that a candidate is outside your scope" in verify and "CANDIDATE FINDINGS" in verify
+    for name in ("compliance", "defects", "security"):
+        assert '"rules"' not in load_pass_system("multi_v3", name), name  # only the standards pass may cite rules

@@ -1,0 +1,60 @@
+{
+  "criteria": [
+    {
+      "number": 1,
+      "verdict": "not_met",
+      "explanation": "The resolve method allows the ticket reporter to resolve a ticket and does not check the admins set, violating the requirement that only the assignee or an administrator may resolve.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "if actor != ticket.assignee and actor != ticket.reporter:"
+        },
+        {
+          "source": "ticket",
+          "quote": "1. Only the assignee or an administrator can resolve a ticket."
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 44,
+      "severity": "high"
+    },
+    {
+      "number": 2,
+      "verdict": "met",
+      "explanation": "When an actor who is neither the assignee nor the reporter attempts to resolve, the code raises PermissionError before any state change, and the test confirms the ticket remains IN_PROGRESS.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "raise PermissionError(f\"{actor} cannot resolve ticket {ticket_id}\")"
+        },
+        {
+          "source": "code",
+          "quote": "with pytest.raises(PermissionError):\n    service.resolve(ticket.id, \"mallory\")\nassert service.get(ticket.id).status is Status.IN_PROGRESS"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 45,
+      "severity": "medium"
+    },
+    {
+      "number": 3,
+      "verdict": "met",
+      "explanation": "The resolve method delegates to the workflow's transition function, which enforces the normal status workflow; the test expects InvalidTransition when resolving a ticket that is not IN_PROGRESS, confirming the behavior.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "transition(ticket, Status.RESOLVED)"
+        },
+        {
+          "source": "code",
+          "quote": "with pytest.raises(InvalidTransition):\n    service.resolve(ticket.id, \"bob\")"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 46,
+      "severity": "medium"
+    }
+  ],
+  "scope_findings": [],
+  "limitations": []
+}

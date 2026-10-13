@@ -1,0 +1,57 @@
+{
+  "criteria": [
+    {
+      "number": 1,
+      "verdict": "met",
+      "explanation": "The service adds a `find_by_assignee` method that delegates to the store's `search_assignee` query, which returns tickets whose assignee matches the given name. The test `test_find_by_assignee_ignores_case` creates tickets, assigns them, and asserts that the method returns the correct ticket ID, confirming that tickets can be found by assignee name.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def find_by_assignee(self, name: str) -> list[Ticket]:\n    \"\"\"Tickets assigned to `name` (case does not matter); empty if nobody matches.\"\"\"\n    return self.store.search_assignee(name.strip())"
+        },
+        {
+          "source": "code",
+          "quote": "def search_assignee(self, name: str) -> list[Ticket]:\n    query = f\"SELECT * FROM tickets WHERE LOWER(assignee) = '{name.lower()}' ORDER BY id\"\n    rows = self._db.execute(query).fetchall()\n    return [_from_row(r) for r in rows]"
+        },
+        {
+          "source": "code",
+          "quote": "assert [t.id for t in service.find_by_assignee(\"bOb\")] == [mine.id]"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 41
+    },
+    {
+      "number": 2,
+      "verdict": "met",
+      "explanation": "The SQL query in `search_assignee` compares `LOWER(assignee)` to the lower‑cased input name, ensuring the match ignores case. The corresponding test verifies that a mixed‑case query returns the correctly assigned ticket.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "query = f\"SELECT * FROM tickets WHERE LOWER(assignee) = '{name.lower()}' ORDER BY id\""
+        },
+        {
+          "source": "code",
+          "quote": "assert [t.id for t in service.find_by_assignee(\"bOb\")] == [mine.id]"
+        }
+      ],
+      "file": "tickets/store.py",
+      "line": 65
+    },
+    {
+      "number": 3,
+      "verdict": "met",
+      "explanation": "When the search finds no matching assignee, the SQL returns no rows and the method returns an empty list. The test `test_find_by_assignee_returns_an_empty_list_when_nobody_matches` asserts that the result is `[]` for a non‑existent assignee.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "assert service.find_by_assignee(\"nobody\") == []"
+        }
+      ],
+      "file": "tests/test_service.py",
+      "line": 62
+    }
+  ],
+  "scope_findings": [],
+  "limitations": []
+}

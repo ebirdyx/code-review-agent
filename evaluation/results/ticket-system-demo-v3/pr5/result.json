@@ -1,0 +1,234 @@
+{
+  "status": "completed",
+  "findings": [
+    {
+      "category": "security",
+      "severity": "medium",
+      "file": "tickets/service.py",
+      "line": 45,
+      "title": "bandit B110: Try, Except, Pass detected.",
+      "explanation": "Try, Except, Pass detected. (reported by the static-analysis tool bandit, rule B110; a deterministic check, not a model's opinion). Also reported by ruff as error_handling: Do not catch blind exception: `Exception` (reported by the static-analysis tool ruff, rule BLE001; a deterministic check, not a model's opinion). Also reported by compliance as requirement_mismatch: When the notification fails, the exception is silently ignored without any logging, so operators cannot see that the notification failed, violating the requirement to log failed notifications. Also reported by defects as error_handling: When the notifier raises an exception, the code catches the exception and silently passes, but it does not log the failure. The acceptance criteria require that a failed notification be logged so operators can see it. The missing logging means the failure is invisible, violating the requirement and making debugging harder. Also reported by standards as maintainability: The code catches a broad `Exception` and silently passes, which violates the team rule that forbids silencing exceptions. Exceptions should be caught narrowly and either logged or re‑raised.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "except Exception:"
+        },
+        {
+          "source": "ticket",
+          "quote": "A failed notification is logged so that operators can see it."
+        },
+        {
+          "source": "code",
+          "quote": "except Exception:\n                pass"
+        },
+        {
+          "source": "code",
+          "quote": "if self.notifier:\n            try:\n                self.notifier(assignee, f\"Ticket {ticket.id} was assigned to you: {ticket.title}\")\n            except Exception:\n                pass"
+        },
+        {
+          "source": "rules",
+          "quote": "Never silence an exception: catch the narrowest type, and log or re-raise it. `except Exception: pass` is not allowed."
+        }
+      ],
+      "found_by": [
+        "ruff",
+        "bandit",
+        "compliance",
+        "defects",
+        "standards"
+      ],
+      "verification": null,
+      "verification_note": "",
+      "source": "tool"
+    }
+  ],
+  "limitations": [],
+  "error": null,
+  "run": {
+    "revision": {
+      "repository": "ebirdyx/ticket-system-demo",
+      "pr_number": 5,
+      "url": "https://github.com/ebirdyx/ticket-system-demo/pull/5",
+      "base_sha": "31011419c5a58b58220c9be837409de5616c9a2f",
+      "head_sha": "0d0a778a1e05c43e2194a590c7b05c1925095f28"
+    },
+    "case_id": "ebirdyx-ticket-system-demo-pr5-0d0a778",
+    "created_at": "2026-10-13T23:54:57+00:00",
+    "prompt_version": "multi_v3",
+    "model": "gpt-oss:120b",
+    "host": "https://ollama.com",
+    "duration_s": 13.548,
+    "prompt_tokens": 20771,
+    "completion_tokens": 3954,
+    "ticket": "TS-5: Notify the assignee on assignment"
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [],
+  "problems": [],
+  "duplicates_removed": 4,
+  "pipeline": "multi",
+  "passes": [
+    {
+      "name": "compliance",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 4.78,
+      "prompt_tokens": 4702,
+      "completion_tokens": 1225,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "defects",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 3.16,
+      "prompt_tokens": 4097,
+      "completion_tokens": 1014,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "security",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.25,
+      "prompt_tokens": 4031,
+      "completion_tokens": 607,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "standards",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.11,
+      "prompt_tokens": 4104,
+      "completion_tokens": 605,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "verify",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 1.97,
+      "prompt_tokens": 3837,
+      "completion_tokens": 503,
+      "findings": 1,
+      "message": ""
+    }
+  ],
+  "criteria": [
+    {
+      "number": 1,
+      "text": "When a ticket is assigned, the new assignee is notified.",
+      "verdict": "met",
+      "explanation": "The assign method calls the provided notifier with the assignee and a message after setting the assignee, satisfying the requirement to notify the new assignee.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "self.notifier(assignee, f\"Ticket {ticket.id} was assigned to you: {ticket.title}\")"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 44,
+      "severity": "medium"
+    },
+    {
+      "number": 2,
+      "text": "If the notification fails, the assignment still succeeds.",
+      "verdict": "met",
+      "explanation": "The notifier call is wrapped in a try/except that catches any exception and allows the method to continue, so a notification failure does not prevent the assignment from succeeding.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "except Exception:\n                pass"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 45,
+      "severity": "medium"
+    },
+    {
+      "number": 3,
+      "text": "A failed notification is logged so that operators can see it.",
+      "verdict": "not_met",
+      "explanation": "When the notification fails, the exception is silently ignored without any logging, so operators cannot see that the notification failed, violating the requirement to log failed notifications.",
+      "evidence": [
+        {
+          "source": "ticket",
+          "quote": "A failed notification is logged so that operators can see it."
+        },
+        {
+          "source": "code",
+          "quote": "except Exception:\n                pass"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 45,
+      "severity": "medium"
+    }
+  ],
+  "dismissed": [
+    {
+      "finding": {
+        "category": "security",
+        "severity": "medium",
+        "file": "tickets/service.py",
+        "line": 39,
+        "title": "Missing authorization check on ticket assignment",
+        "explanation": "The `assign` method updates the ticket's assignee without verifying that the caller is authorized to perform the assignment, allowing any user to reassign tickets arbitrarily.",
+        "evidence": [
+          {
+            "source": "code",
+            "quote": "def assign(self, ticket_id: int, assignee: str) -> Ticket:\n        ticket = self.get(ticket_id)\n        ticket.assignee = assignee\n        self.store.save(ticket)\n        if self.notifier:\n            try:\n                self.notifier(assignee, f\"Ticket {ticket.id} was assigned to you: {ticket.title}\")\n            except Exception:\n                pass\n        return ticket"
+          }
+        ],
+        "found_by": [
+          "security"
+        ],
+        "verification": null,
+        "verification_note": "",
+        "source": "llm"
+      },
+      "reason": "The code indeed lacks an explicit authorization check, but no requirement or rule in the provided ticket, PR description, or team rules mandates such a check for assignment, so the claim is not substantiated by the given evidence."
+    }
+  ],
+  "tools": [
+    {
+      "name": "ruff",
+      "version": "0.17.0",
+      "status": "ok",
+      "message": "",
+      "files_checked": 2,
+      "total_findings": 1,
+      "findings_on_changed_lines": 1,
+      "duration_s": 0.95
+    },
+    {
+      "name": "bandit",
+      "version": "1.9.4",
+      "status": "ok",
+      "message": "8 warning(s) in test files were ignored (noise in tests)",
+      "files_checked": 2,
+      "total_findings": 1,
+      "findings_on_changed_lines": 1,
+      "duration_s": 3.84
+    }
+  ],
+  "change_profile": {
+    "files_changed": 2,
+    "lines_added": 27,
+    "lines_removed": 1,
+    "languages": {
+      ".py": 2
+    },
+    "source_files": 1,
+    "test_files": 1,
+    "hints": []
+  }
+}

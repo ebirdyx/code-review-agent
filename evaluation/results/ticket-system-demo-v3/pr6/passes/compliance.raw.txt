@@ -1,0 +1,54 @@
+{
+  "criteria": [
+    {
+      "number": 1,
+      "verdict": "met",
+      "explanation": "The Ticket model includes an optional due_date field and the service provides set_due_date to set or clear it, satisfying the optional due date requirement.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "due_date: date | None = None"
+        },
+        {
+          "source": "code",
+          "quote": "def set_due_date(self, ticket_id: int, due: date | None) -> Ticket:"
+        },
+        {
+          "source": "code",
+          "quote": "assert service.set_due_date(ticket.id, date(2026, 11, 1)).due_date == date(2026, 11, 1)"
+        },
+        {
+          "source": "code",
+          "quote": "assert service.set_due_date(ticket.id, None).due_date is None"
+        }
+      ],
+      "file": "tickets/models.py",
+      "line": 34,
+      "severity": "medium"
+    },
+    {
+      "number": 2,
+      "verdict": "met",
+      "explanation": "The service provides an overdue method that returns tickets whose due date has passed and are not closed, and a test confirms overdue tickets are listed.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def overdue(self, today: date | None = None) -> list[Ticket]:"
+        },
+        {
+          "source": "code",
+          "quote": "if t.due_date is not None and t.due_date < today"
+        },
+        {
+          "source": "code",
+          "quote": "assert [t.id for t in service.overdue(date(2026, 10, 13))] == [late.id]"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 50,
+      "severity": "medium"
+    }
+  ],
+  "scope_findings": [],
+  "limitations": []
+}

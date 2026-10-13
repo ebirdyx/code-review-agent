@@ -1,0 +1,15 @@
+{
+  "verdicts": [
+    {
+      "index": 1,
+      "verdict": "supported",
+      "reason": "assign stores the assignee string unchanged while find_by_assignee strips whitespace from the search term, so a stored name with leading/trailing spaces will not match a stripped search."
+    },
+    {
+      "index": 2,
+      "verdict": "supported",
+      "reason": "search_assignee is a public method without any docstring, violating the team rule that public functions must have a one-line docstring describing return or raise."
+    }
+  ],
+  "limitations": []
+}

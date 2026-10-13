@@ -1,0 +1,70 @@
+{
+  "criteria": [
+    {
+      "number": 1,
+      "verdict": "met",
+      "explanation": "The add_comment method accepts any author string and does not enforce permission checks, allowing any user to add a comment to an existing ticket.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def add_comment(self, ticket_id: int, author: str, body: str) -> Comment:\n    \"\"\"Add a comment to an existing ticket. Raises ValueError if it is empty or longer than MAX_COMMENT.\"\"\"\n    self.get(ticket_id)  # raises TicketNotFound\n    body = body.strip()\n    if not body:\n        raise ValueError(\"a comment cannot be empty\")\n    if len(body) > MAX_COMMENT:\n        raise ValueError(f\"a comment is at most {MAX_COMMENT} characters\")\n    return self.store.add_comment(Comment(id=0, ticket_id=ticket_id, author=author, body=body))"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 42,
+      "severity": "medium"
+    },
+    {
+      "number": 2,
+      "verdict": "met",
+      "explanation": "add_comment strips whitespace and raises ValueError when the resulting body is empty, rejecting empty or whitespace‑only comments.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "body = body.strip()\nif not body:\n    raise ValueError(\"a comment cannot be empty\")"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 45,
+      "severity": "medium"
+    },
+    {
+      "number": 3,
+      "verdict": "met",
+      "explanation": "MAX_COMMENT is defined as 2000 and add_comment raises a ValueError if the comment length exceeds this limit, enforcing the \"at most 2000 characters\" rule.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "MAX_COMMENT = 2000"
+        },
+        {
+          "source": "code",
+          "quote": "if len(body) > MAX_COMMENT:\n    raise ValueError(f\"a comment is at most {MAX_COMMENT} characters\")"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 10,
+      "severity": "medium"
+    },
+    {
+      "number": 4,
+      "verdict": "met",
+      "explanation": "list_comments queries the comments table ordered by id, which reflects insertion order, and the test asserts that comments are returned oldest first.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "rows = self._db.execute(\"SELECT * FROM comments WHERE ticket_id = ? ORDER BY id\", (ticket_id,)).fetchall()"
+        },
+        {
+          "source": "code",
+          "quote": "assert [c.body for c in service.comments(ticket.id)] == [\"first\", \"second\"]"
+        }
+      ],
+      "file": "tickets/store.py",
+      "line": 88,
+      "severity": "medium"
+    }
+  ],
+  "scope_findings": [],
+  "limitations": []
+}

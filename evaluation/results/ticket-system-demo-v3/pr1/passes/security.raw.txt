@@ -1,0 +1,6 @@
+{
+  "findings": [],
+  "limitations": [
+    "The review cannot determine if comment bodies are later rendered in a web context without proper escaping, which could lead to XSS vulnerabilities."
+  ]
+}

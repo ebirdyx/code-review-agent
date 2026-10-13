@@ -1,0 +1,23 @@
+{
+  "findings": [
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/service.py",
+      "line": 43,
+      "title": "Rule: Public functions must have a docstring that says what they return or raise",
+      "explanation": "The public method `set_due_date` has a one-line docstring that describes the action but does not state what the function returns, violating the rule that docstrings must say what they return or raise.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def set_due_date(self, ticket_id: int, due: date | None) -> Ticket:\n    \"\"\"Set or clear the due date of a ticket.\"\"\""
+        },
+        {
+          "source": "rules",
+          "quote": "Public functions have type hints and a one-line docstring that says what they return or raise."
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}

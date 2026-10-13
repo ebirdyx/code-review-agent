@@ -1,0 +1,37 @@
+{
+  "findings": [
+    {
+      "category": "logic_defect",
+      "severity": "high",
+      "file": "tickets/service.py",
+      "line": 44,
+      "title": "Incorrect permission check allows reporter and disallows admins",
+      "explanation": "The `resolve` method checks `if actor != ticket.assignee and actor != ticket.reporter:` which permits the ticket reporter to resolve the ticket and never checks the `admins` set. According to the ticket requirements, only the assignee or an administrator should be allowed to resolve. This logic error can let unauthorized users resolve tickets and prevents administrators from doing so.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "if actor != ticket.assignee and actor != ticket.reporter:"
+        },
+        {
+          "source": "code",
+          "quote": "def resolve(self, ticket_id: int, actor: str, admins: frozenset[str] = frozenset()) -> Ticket:"
+        }
+      ]
+    },
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/service.py",
+      "line": 41,
+      "title": "Unused `admins` parameter in resolve method",
+      "explanation": "The `resolve` method signature includes an `admins` frozenset argument that is never referenced inside the function body, making the parameter dead code and potentially confusing future maintainers.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def resolve(self, ticket_id: int, actor: str, admins: frozenset[str] = frozenset()) -> Ticket:"
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}

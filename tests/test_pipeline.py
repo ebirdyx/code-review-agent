@@ -434,10 +434,77 @@ def mk(category="logic_defect", severity="medium", file="a.py", line=5, title="t
         {"source": "code", "quote": quote}]), "found_by": [by]})
 
 
-def test_merge_keeps_two_distinct_issues_on_one_line():
-    merged, removed = merge_candidates([mk("security", title="SQL injection", by="security"),
-                                        mk("boundary_condition", title="Off by one")])
-    assert len(merged) == 2 and removed == 0  # different specific categories: not the same issue
+def test_two_angles_on_one_line_become_one_finding_and_neither_explanation_is_lost():
+    sql = mk("security", title="SQL injection", by="security").model_copy(update={"explanation": "The query is built from user input."})
+    off = mk("boundary_condition", title="Off by one", by="defects").model_copy(update={"explanation": "The loop stops one item early."})
+    merged, removed = merge_candidates([sql, off])
+    assert len(merged) == 1 and removed == 1
+    m = merged[0]
+    assert m.category == "security" and m.found_by == ["security", "defects"]
+    assert "built from user input" in m.explanation
+    assert "Also reported by defects as boundary_condition: The loop stops one item early." in m.explanation
+
+
+def test_the_same_category_restated_does_not_pile_up_text():
+    a = mk("logic_defect", by="defects").model_copy(update={"explanation": "One wording."})
+    b = mk("logic_defect", by="security").model_copy(update={"explanation": "Another wording."})
+    merged, _ = merge_candidates([a, b])
+    assert merged[0].explanation == "One wording." and merged[0].found_by == ["defects", "security"]
+
+
+def test_a_criterion_finding_merges_with_a_report_a_few_lines_away_but_not_with_style_findings():
+    criterion = mk("requirement_mismatch", "high", line=41, by="compliance", quote="a")
+    defect = mk("logic_defect", "high", line=44, by="defects", quote="b")
+    assert len(merge_candidates([criterion, defect])[0]) == 1
+    far = mk("logic_defect", "high", line=60, by="defects", quote="c")
+    assert len(merge_candidates([criterion, far])[0]) == 2
+    style = mk("maintainability", "low", line=42, by="standards", quote="d")
+    assert len(merge_candidates([criterion, style])[0]) == 2  # a docstring remark is not the same problem
+
+
+# ------------------------------------------------------------- checklist vs findings
+
+
+def check(number=1, verdict="met", file=None, line=None, quote=None):
+    from code_review_agent.schemas import CriterionCheck, Evidence
+
+    evidence = [Evidence(source="code", quote=quote)] if quote else []
+    return CriterionCheck(number=number, text="c", verdict=verdict, explanation="e", evidence=evidence, file=file, line=line)
+
+
+def test_a_met_criterion_that_cites_code_a_finding_calls_wrong_is_flagged_not_changed():
+    from code_review_agent.pipeline import check_consistency
+
+    criteria = [check(1, file="a.py", line=5)]
+    problems = check_consistency(criteria, [mk("boundary_condition", "high", file="a.py", line=5, title="Off by one")])
+    assert len(problems) == 1 and problems[0].kind == ProblemKind.INCONSISTENT_VERDICT and problems[0].criterion_index == 0
+    assert "Off by one" in problems[0].message and criteria[0].verdict == "met"  # the verdict itself is never rewritten
+
+
+def test_the_same_quoted_code_is_enough_even_without_a_location():
+    """Seen with Qwen2.5-Coder: the criterion was marked met with no line, but quoted the line the finding blames."""
+    from code_review_agent.pipeline import check_consistency
+
+    criteria = [check(1, quote="if total >   100:")]
+    findings = [mk("boundary_condition", "high", line=6, quote="if total > 100:")]
+    assert len(check_consistency(criteria, findings)) == 1
+
+
+def test_security_style_and_distant_findings_do_not_contradict_a_met_criterion():
+    from code_review_agent.pipeline import check_consistency
+
+    criteria = [check(1, file="a.py", line=5, quote="x")]
+    assert check_consistency(criteria, [mk("security", file="a.py", line=5, quote="x")]) == []
+    assert check_consistency(criteria, [mk("maintainability", file="a.py", line=5, quote="x")]) == []
+    assert check_consistency(criteria, [mk("logic_defect", file="a.py", line=50, quote="y")]) == []
+    assert check_consistency(criteria, [mk("logic_defect", file="b.py", line=5, quote="y")]) == []
+
+
+def test_only_met_criteria_are_checked():
+    from code_review_agent.pipeline import check_consistency
+
+    criteria = [check(1, verdict="not_met", file="a.py", line=5), check(2, verdict="cannot_determine", file="a.py", line=5)]
+    assert check_consistency(criteria, [mk("logic_defect", file="a.py", line=5)]) == []
 
 
 def test_requirement_mismatch_folds_into_the_specific_report_of_the_same_line():

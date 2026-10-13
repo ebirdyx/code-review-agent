@@ -1,0 +1,19 @@
+{
+  "findings": [
+    {
+      "category": "security",
+      "severity": "high",
+      "file": "tickets/store.py",
+      "line": 65,
+      "title": "SQL injection via unparameterized query in search_assignee",
+      "explanation": "The method builds an SQL statement with an f‑string that directly interpolates the user‑supplied `name` value, allowing an attacker to inject arbitrary SQL (e.g., \"bob' OR 1=1 --\") and retrieve or manipulate data beyond the intended assignee filter.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "query = f\"SELECT * FROM tickets WHERE LOWER(assignee) = '{name.lower()}' ORDER BY id\""
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}

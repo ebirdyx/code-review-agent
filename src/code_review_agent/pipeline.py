@@ -69,7 +69,7 @@ from .schemas import (
 )
 from .validation import DROPPED, InvalidOutput, check_criteria, check_grounding, parse_json_output
 
-MULTI_PROMPT_VERSION = "multi_v2"  # v1 had no static-analysis or team-rules blocks; it stays loadable
+MULTI_PROMPT_VERSION = "multi_v3"  # v1 had no static-analysis or team-rules blocks; v1 and v2 stay loadable (v3: stricter rules pass, vague-criteria guidance, verifier judges rule findings)
 DEFAULT_PASSES = ("compliance", "defects", "security", "standards")
 PASS_MODELS: dict[str, type[BaseModel]] = {
     "compliance": ComplianceReview,
@@ -86,6 +86,10 @@ def _schema_for(name: str) -> dict:
 
 _SEVERITY_RANK = {Severity.CRITICAL: 0, Severity.HIGH: 1, Severity.MEDIUM: 2, Severity.LOW: 3}
 # When two reports describe one issue, the more specific category wins.
+NEARBY_LINES = 3
+# Findings that say "the behaviour is wrong". A security or style finding on the code a `met` verdict cites is a
+# different matter (the requirement can be met by insecure code), so only these can contradict a `met`.
+_BEHAVIOUR_CATEGORIES = {Category.LOGIC_DEFECT, Category.BOUNDARY_CONDITION, Category.REQUIREMENT_MISMATCH}
 _SPECIFICITY = [Category.SECURITY, Category.BOUNDARY_CONDITION, Category.ERROR_HANDLING,
                 Category.LOGIC_DEFECT, Category.MAINTAINABILITY, Category.REQUIREMENT_MISMATCH]
 
@@ -165,12 +169,19 @@ def _finding_from_criterion(check: CriterionCheck) -> Finding:
 
 
 def _same_issue(a: Finding, b: Finding) -> bool:
+    """One report per spot. Specialists look at a problem from different angles (the ticket, bugs, security, the team
+    rules), so the same defect often comes back under different categories on the same line. Nothing is lost by
+    folding them: `merge_candidates` keeps every explanation and every quote."""
     if a.file != b.file or a.file == WHOLE_CHANGE:
         return False
-    same_place = a.line is not None and a.line == b.line
-    compatible = a.category == b.category or Category.REQUIREMENT_MISMATCH in (a.category, b.category)
-    if same_place and compatible:
+    if a.line is not None and a.line == b.line:
         return True
+    # A criterion that is not met points at "where the code concerned is" (often the whole function), while the
+    # defects pass points at the exact line: a few lines apart is still the same problem. Style findings stay apart.
+    if a.line is not None and b.line is not None and abs(a.line - b.line) <= NEARBY_LINES:
+        pair = {a.category, b.category}
+        if Category.REQUIREMENT_MISMATCH in pair and Category.MAINTAINABILITY not in pair:
+            return True
     return a.category == b.category and _norm(a.title) == _norm(b.title)
 
 
@@ -181,10 +192,10 @@ def _norm(title: str) -> str:
 def merge_candidates(findings: list[Finding]) -> tuple[list[Finding], int]:
     """Fold reports of the same issue into one finding; order by severity.
 
-    Two reports are the same issue when they cite the same file and line (and their categories are
-    compatible: equal, or one is the generic requirement_mismatch), or share file, category and title.
-    The merged finding keeps the more specific category, the higher severity, all evidence, and
-    remembers every pass that reported it.
+    Two reports are the same issue when they cite the same file and line, whatever their categories, or share
+    file, category and title. The merged finding keeps the more specific category, the higher severity, all
+    evidence, remembers every pass that reported it, and, when the other report comes from another category, adds its
+    explanation ("Also reported by ...") so a second, different problem on the same line is not hidden.
     """
     merged: list[Finding] = []
     for f in findings:
@@ -194,8 +205,13 @@ def merge_candidates(findings: list[Finding]) -> tuple[list[Finding], int]:
             primary, other = (g, f) if _SPECIFICITY.index(g.category) <= _SPECIFICITY.index(f.category) else (f, g)
             seen = {(e.source, e.quote) for e in primary.evidence}
             evidence = list(primary.evidence) + [e for e in other.evidence if (e.source, e.quote) not in seen]
+            explanation = primary.explanation
+            if _norm(other.explanation) not in _norm(explanation) and other.category != primary.category:
+                who = ", ".join(other.found_by) or "another pass"
+                explanation += f" Also reported by {who} as {other.category.value}: {_short(other.explanation, 400)}"
             merged[i] = primary.model_copy(update={
                 "severity": min(g.severity, f.severity, key=_SEVERITY_RANK.__getitem__),
+                "explanation": explanation,
                 "evidence": evidence,
                 "found_by": list(dict.fromkeys([*g.found_by, *f.found_by])),
                 "source": "tool" if "tool" in (g.source, f.source) else "llm",  # one tool report makes it tool-backed
@@ -230,6 +246,36 @@ def _criteria_checks(ticket: Ticket | None, verdicts: list[CriterionVerdict], ou
             checks.append(CriterionCheck(number=n, text=text, verdict=v.verdict, explanation=v.explanation,
                                          evidence=v.evidence, file=v.file, line=v.line, severity=v.severity))
     return checks
+
+
+def _code_quotes(evidence: list[Evidence]) -> set[str]:
+    return {" ".join(e.quote.split()) for e in evidence if e.source == "code" and e.quote.strip()}
+
+
+def check_consistency(criteria: list[CriterionCheck], findings: list[Finding]) -> list[ValidationProblem]:
+    """Flag a criterion marked `met` when a finding reports a problem in the code that verdict cites.
+
+    Weaker models sometimes contradict themselves (checklist says met, a finding says the same line is wrong).
+    We never change a verdict by guessing; we point the human at the disagreement. A finding counts when it sits on
+    the verdict's own file and line, or quotes the same code, and says the behaviour is wrong (see
+    `_BEHAVIOUR_CATEGORIES`): security and style findings do not contradict a met requirement.
+    """
+    problems = []
+    for index, check in enumerate(criteria):
+        if check.verdict != "met":
+            continue
+        cited = _code_quotes(check.evidence)
+        for number, f in enumerate(findings, 1):
+            if f.category not in _BEHAVIOUR_CATEGORIES:
+                continue
+            same_place = bool(check.file) and f.file == check.file and check.line is not None and f.line == check.line
+            if same_place or (cited & _code_quotes(f.evidence)):
+                problems.append(ValidationProblem(
+                    criterion_index=index, kind=ProblemKind.INCONSISTENT_VERDICT,
+                    message=f"Marked met, but finding {number} ('{_short(f.title, 70)}') reports a problem in the code "
+                            "this verdict cites. Check this verdict yourself."))
+                break
+    return problems
 
 
 def _prepare(record: RunRecord, ticket: Ticket | None, review_input: ReviewInput) -> _Prepared:
@@ -371,7 +417,8 @@ def assemble_multi(record: RunRecord, ticket: Ticket | None, review_input: Revie
     grounding = check_grounding(kept, ticket, review_input)
     criteria_problems = check_criteria(prepared.criteria, ticket, review_input)
     # check_criteria numbers rows by list position, which is the same as the position kept in `criteria`
-    problems = prepared.problems + verify_problems + grounding + criteria_problems
+    consistency = check_consistency(prepared.criteria, kept)
+    problems = prepared.problems + verify_problems + grounding + criteria_problems + consistency
     return ReviewResult(
         status="completed", findings=kept, limitations=prepared.limitations, problems=problems,
         duplicates_removed=prepared.merged_away, criteria=prepared.criteria, dismissed=dismissed, **common,

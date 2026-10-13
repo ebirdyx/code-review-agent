@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 
 from .report import DISCLAIMER, _fence, _location
-from .schemas import Finding, ReviewResult, Severity
+from .schemas import Finding, ProblemKind, ReviewResult, Severity
 
 MARKER = "<!-- code-review-agent -->"
 MAX_COMMENT_CHARS = 60_000  # GitHub's limit is 65,536
@@ -82,8 +82,10 @@ def render_pr_comment(result: ReviewResult, *, report_hint: str | None = None) -
 
         if result.criteria:
             out += ["### Requirements", "", "| # | Criterion | Verdict |", "|--:|---|---|"]
-            for c in result.criteria:
-                out.append(f"| {c.number} | {_clean(c.text, 200)} | {_VERDICT.get(c.verdict, c.verdict)} |")
+            conflicting = {p.criterion_index for p in result.problems if p.kind == ProblemKind.INCONSISTENT_VERDICT}
+            for index, c in enumerate(result.criteria):
+                note = " (check: a finding disagrees)" if index in conflicting else ""
+                out.append(f"| {c.number} | {_clean(c.text, 200)} | {_VERDICT.get(c.verdict, c.verdict)}{note} |")
             out.append("")
 
         if result.findings:

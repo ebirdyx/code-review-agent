@@ -1,0 +1,19 @@
+{
+  "findings": [
+    {
+      "category": "error_handling",
+      "severity": "medium",
+      "file": "tickets/service.py",
+      "line": 45,
+      "title": "Failed notification is not logged",
+      "explanation": "When the notifier raises an exception, the code catches the exception and silently passes, but it does not log the failure. The acceptance criteria require that a failed notification be logged so operators can see it. The missing logging means the failure is invisible, violating the requirement and making debugging harder.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "if self.notifier:\n            try:\n                self.notifier(assignee, f\"Ticket {ticket.id} was assigned to you: {ticket.title}\")\n            except Exception:\n                pass"
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}

@@ -1,0 +1,259 @@
+{
+  "status": "completed",
+  "findings": [
+    {
+      "category": "security",
+      "severity": "high",
+      "file": "tickets/store.py",
+      "line": 65,
+      "title": "bandit B608: Possible SQL injection vector through string-based query construction.",
+      "explanation": "Possible SQL injection vector through string-based query construction. (reported by the static-analysis tool bandit, rule B608; a deterministic check, not a model's opinion). Also reported by standards as maintainability: The new method `search_assignee` builds an SQL query using an f‑string, which violates the rule that SQL must use bound parameters to avoid injection risks.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "query = f\"SELECT * FROM tickets WHERE LOWER(assignee) = '{name.lower()}' ORDER BY id\""
+        },
+        {
+          "source": "rules",
+          "quote": "All SQL uses bound parameters (`?`). Never build SQL with f-strings, `%` or `+`."
+        }
+      ],
+      "found_by": [
+        "bandit",
+        "security",
+        "standards"
+      ],
+      "verification": null,
+      "verification_note": "",
+      "source": "tool"
+    },
+    {
+      "category": "logic_defect",
+      "severity": "medium",
+      "file": "tickets/service.py",
+      "line": 41,
+      "title": "Whitespace in assignee names is not normalized, causing mismatched searches",
+      "explanation": "The `assign` method stores the assignee string as‑is, while `find_by_assignee` strips whitespace from the search term before querying. If an assignee is saved with leading or trailing spaces, a subsequent search for the same name (without spaces) will not match, leading to incorrect empty results.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def assign(self, ticket_id: int, assignee: str) -> Ticket:\n        ticket = self.get(ticket_id)\n        ticket.assignee = assignee\n        self.store.save(ticket)\n        return ticket"
+        },
+        {
+          "source": "code",
+          "quote": "def find_by_assignee(self, name: str) -> list[Ticket]:\n        \"\"\"Tickets assigned to `name` (case does not matter); empty if nobody matches.\"\"\"\n        return self.store.search_assignee(name.strip())"
+        }
+      ],
+      "found_by": [
+        "defects"
+      ],
+      "verification": "supported",
+      "verification_note": "assign stores the assignee string unchanged while find_by_assignee strips whitespace from the search term, so a stored name with leading/trailing spaces will not match a stripped search.",
+      "source": "llm"
+    },
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/store.py",
+      "line": 64,
+      "title": "Rule: Public functions have a one-line docstring",
+      "explanation": "The newly added public method `search_assignee` lacks a docstring that describes its return value, violating the rule that public functions must have a one‑line docstring stating what they return or raise.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def search_assignee(self, name: str) -> list[Ticket]:"
+        },
+        {
+          "source": "rules",
+          "quote": "Public functions have type hints and a one-line docstring that says what they return or raise."
+        }
+      ],
+      "found_by": [
+        "standards"
+      ],
+      "verification": "supported",
+      "verification_note": "search_assignee is a public method without any docstring, violating the team rule that public functions must have a one-line docstring describing return or raise.",
+      "source": "llm"
+    }
+  ],
+  "limitations": [],
+  "error": null,
+  "run": {
+    "revision": {
+      "repository": "ebirdyx/ticket-system-demo",
+      "pr_number": 3,
+      "url": "https://github.com/ebirdyx/ticket-system-demo/pull/3",
+      "base_sha": "31011419c5a58b58220c9be837409de5616c9a2f",
+      "head_sha": "60559c2aa26af2ffe8c6ccc9751feffc69e96237"
+    },
+    "case_id": "ebirdyx-ticket-system-demo-pr3-60559c2",
+    "created_at": "2026-10-13T23:53:19+00:00",
+    "prompt_version": "multi_v3",
+    "model": "gpt-oss:120b",
+    "host": "https://ollama.com",
+    "duration_s": 15.744,
+    "prompt_tokens": 23523,
+    "completion_tokens": 5125,
+    "ticket": "TS-3: Search tickets by assignee"
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [],
+  "problems": [
+    {
+      "finding_index": null,
+      "criterion_index": 0,
+      "kind": "inconsistent_verdict",
+      "message": "Marked met, but finding 2 ('Whitespace in assignee names is not normalized, causing mismatched se…') reports a problem in the code this verdict cites. Check this verdict yourself."
+    }
+  ],
+  "duplicates_removed": 2,
+  "pipeline": "multi",
+  "passes": [
+    {
+      "name": "compliance",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 3.56,
+      "prompt_tokens": 5221,
+      "completion_tokens": 1462,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "defects",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.55,
+      "prompt_tokens": 4616,
+      "completion_tokens": 923,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "security",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 1.8,
+      "prompt_tokens": 4550,
+      "completion_tokens": 601,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "standards",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 5.26,
+      "prompt_tokens": 4623,
+      "completion_tokens": 1160,
+      "findings": 2,
+      "message": ""
+    },
+    {
+      "name": "verify",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 3.3,
+      "prompt_tokens": 4513,
+      "completion_tokens": 979,
+      "findings": 0,
+      "message": ""
+    }
+  ],
+  "criteria": [
+    {
+      "number": 1,
+      "text": "Tickets can be found by the name of their assignee.",
+      "verdict": "met",
+      "explanation": "The service adds a `find_by_assignee` method that delegates to the store's `search_assignee` query, which returns tickets whose assignee matches the given name. The test `test_find_by_assignee_ignores_case` creates tickets, assigns them, and asserts that the method returns the correct ticket ID, confirming that tickets can be found by assignee name.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def find_by_assignee(self, name: str) -> list[Ticket]:\n    \"\"\"Tickets assigned to `name` (case does not matter); empty if nobody matches.\"\"\"\n    return self.store.search_assignee(name.strip())"
+        },
+        {
+          "source": "code",
+          "quote": "def search_assignee(self, name: str) -> list[Ticket]:\n    query = f\"SELECT * FROM tickets WHERE LOWER(assignee) = '{name.lower()}' ORDER BY id\"\n    rows = self._db.execute(query).fetchall()\n    return [_from_row(r) for r in rows]"
+        },
+        {
+          "source": "code",
+          "quote": "assert [t.id for t in service.find_by_assignee(\"bOb\")] == [mine.id]"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 41,
+      "severity": "medium"
+    },
+    {
+      "number": 2,
+      "text": "The match ignores upper and lower case.",
+      "verdict": "met",
+      "explanation": "The SQL query in `search_assignee` compares `LOWER(assignee)` to the lower‑cased input name, ensuring the match ignores case. The corresponding test verifies that a mixed‑case query returns the correctly assigned ticket.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "query = f\"SELECT * FROM tickets WHERE LOWER(assignee) = '{name.lower()}' ORDER BY id\""
+        },
+        {
+          "source": "code",
+          "quote": "assert [t.id for t in service.find_by_assignee(\"bOb\")] == [mine.id]"
+        }
+      ],
+      "file": "tickets/store.py",
+      "line": 65,
+      "severity": "medium"
+    },
+    {
+      "number": 3,
+      "text": "When nobody matches, the result is an empty list.",
+      "verdict": "met",
+      "explanation": "When the search finds no matching assignee, the SQL returns no rows and the method returns an empty list. The test `test_find_by_assignee_returns_an_empty_list_when_nobody_matches` asserts that the result is `[]` for a non‑existent assignee.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "assert service.find_by_assignee(\"nobody\") == []"
+        }
+      ],
+      "file": "tests/test_service.py",
+      "line": 62,
+      "severity": "medium"
+    }
+  ],
+  "dismissed": [],
+  "tools": [
+    {
+      "name": "ruff",
+      "version": "0.17.0",
+      "status": "ok",
+      "message": "",
+      "files_checked": 3,
+      "total_findings": 0,
+      "findings_on_changed_lines": 0,
+      "duration_s": 3.58
+    },
+    {
+      "name": "bandit",
+      "version": "1.9.4",
+      "status": "ok",
+      "message": "7 warning(s) in test files were ignored (noise in tests)",
+      "files_checked": 3,
+      "total_findings": 1,
+      "findings_on_changed_lines": 1,
+      "duration_s": 2.75
+    }
+  ],
+  "change_profile": {
+    "files_changed": 3,
+    "lines_added": 23,
+    "lines_removed": 0,
+    "languages": {
+      ".py": 3
+    },
+    "source_files": 2,
+    "test_files": 1,
+    "hints": []
+  }
+}

@@ -213,6 +213,7 @@ class ProblemKind(StrEnum):
     UNSUPPORTED_VERDICT = "unsupported_verdict"  # a met / not_met verdict without evidence
     MISSING_VERDICT = "missing_verdict"  # the model skipped a criterion; we marked it cannot_determine
     UNKNOWN_CRITERION = "unknown_criterion"  # a verdict for a criterion number that does not exist
+    INCONSISTENT_VERDICT = "inconsistent_verdict"  # a criterion marked met, yet a finding reports a problem in the code it cites
 
 
 class ValidationProblem(StrictModel):

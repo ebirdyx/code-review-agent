@@ -1,0 +1,19 @@
+{
+  "findings": [
+    {
+      "category": "error_handling",
+      "severity": "medium",
+      "file": "tickets/store.py",
+      "line": 76,
+      "title": "add_comment does not verify ticket existence",
+      "explanation": "The store's add_comment method inserts a comment row without checking that the referenced ticket_id exists. If called directly (bypassing TicketService), it can create orphan comments, violating data integrity.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def add_comment(self, comment: Comment) -> Comment:\n        \"\"\"Insert a comment and return it with its new id.\"\"\"\n        cursor = self._db.execute(\n            \"INSERT INTO comments (ticket_id, author, body, created_at) VALUES (?, ?, ?, ?)\",\n            (comment.ticket_id, comment.author, comment.body, comment.created_at.isoformat()),\n        )"
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}

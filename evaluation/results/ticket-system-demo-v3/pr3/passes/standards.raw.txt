@@ -1,0 +1,41 @@
+{
+  "findings": [
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/store.py",
+      "line": 65,
+      "title": "Rule: All SQL uses bound parameters",
+      "explanation": "The new method `search_assignee` builds an SQL query using an f‑string, which violates the rule that SQL must use bound parameters to avoid injection risks.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "query = f\"SELECT * FROM tickets WHERE LOWER(assignee) = '{name.lower()}' ORDER BY id\""
+        },
+        {
+          "source": "rules",
+          "quote": "All SQL uses bound parameters (`?`). Never build SQL with f-strings, `%` or `+`."
+        }
+      ]
+    },
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/store.py",
+      "line": 64,
+      "title": "Rule: Public functions have a one-line docstring",
+      "explanation": "The newly added public method `search_assignee` lacks a docstring that describes its return value, violating the rule that public functions must have a one‑line docstring stating what they return or raise.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def search_assignee(self, name: str) -> list[Ticket]:"
+        },
+        {
+          "source": "rules",
+          "quote": "Public functions have type hints and a one-line docstring that says what they return or raise."
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}
