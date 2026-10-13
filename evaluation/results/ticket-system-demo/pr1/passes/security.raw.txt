@@ -1,0 +1,6 @@
+{
+  "findings": [],
+  "limitations": [
+    "The review only covers the provided backend code; potential security issues such as XSS depend on how comment bodies and authors are rendered in the UI, which is not visible here."
+  ]
+}

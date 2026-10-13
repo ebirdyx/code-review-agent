@@ -1,0 +1,20 @@
+{
+  "verdicts": [
+    {
+      "index": 1,
+      "verdict": "supported",
+      "reason": "The `search_assignee` method builds the SQL query with an f‑string that directly interpolates the user‑provided name, which can lead to injection or syntax errors on special characters."
+    },
+    {
+      "index": 2,
+      "verdict": "supported",
+      "reason": "The method constructs the query using an f‑string instead of bound parameters, which conflicts with the project's requirement to use parameter binding for all SQL."
+    },
+    {
+      "index": 3,
+      "verdict": "supported",
+      "reason": "The public function `search_assignee` has type hints but no docstring describing its return value or possible exceptions."
+    }
+  ],
+  "limitations": []
+}

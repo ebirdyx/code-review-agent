@@ -605,7 +605,21 @@ def eval_score_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def _make_output_safe() -> None:
+    """Reports contain whatever characters the model wrote (non-breaking hyphens, accents...).
+
+    A Windows console or a redirected file uses a legacy code page by default, and printing such a character
+    would crash the command after the review has finished. Keep the text; replace only what cannot be shown.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError):  # not a text stream that can be reconfigured (for example in tests)
+            pass
+
+
 def main(argv: list[str] | None = None) -> int:
+    _make_output_safe()
     parser = argparse.ArgumentParser(prog="review-agent", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 

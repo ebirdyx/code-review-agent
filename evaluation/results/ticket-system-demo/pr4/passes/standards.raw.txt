@@ -1,0 +1,23 @@
+{
+  "findings": [
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/service.py",
+      "line": 42,
+      "title": "Rule: public functions docstring must describe return",
+      "explanation": "The public function `resolve` has a docstring that mentions the raised PermissionError but does not describe what the function returns, violating the rule that public functions must have a one-line docstring stating what they return or raise.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "\"\"\"Mark a ticket resolved. Raises PermissionError if `actor` is not allowed to.\"\"\""
+        },
+        {
+          "source": "rules",
+          "quote": "Public functions have type hints and a one-line docstring that says what they return or raise."
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}

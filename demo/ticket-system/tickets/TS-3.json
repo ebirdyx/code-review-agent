@@ -1,0 +1,10 @@
+{
+  "key": "TS-3",
+  "title": "Search tickets by assignee",
+  "description": "Support leads want to see everything assigned to one person.",
+  "acceptance_criteria": [
+    "Tickets can be found by the name of their assignee.",
+    "The match ignores upper and lower case.",
+    "When nobody matches, the result is an empty list."
+  ]
+}

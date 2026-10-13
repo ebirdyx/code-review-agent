@@ -359,3 +359,17 @@ def test_unknown_job_and_unknown_paths(ui):
     assert client.request("/api/jobs/nope")[0] == 404
     assert client.request("/api/nothing")[0] == 404
     assert client.request("/api/review")[0] == 404  # GET is not a route
+
+
+def test_printing_a_report_with_unusual_characters_never_crashes_the_command(tmp_path):
+    """Regression: a model wrote U+2011 (non-breaking hyphen); a redirected cp1252 stdout then raised UnicodeEncodeError."""
+    import subprocess
+    import sys
+
+    code = (
+        "from code_review_agent.cli import _make_output_safe; _make_output_safe(); "
+        "print('free\u2011shipping caf\u00e9')"
+    )
+    done = subprocess.run([sys.executable, "-c", code], capture_output=True, env={**__import__('os').environ, "PYTHONIOENCODING": "cp1252"})
+    assert done.returncode == 0, done.stderr.decode(errors="replace")
+    assert b"free" in done.stdout and b"shipping" in done.stdout

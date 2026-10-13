@@ -1,0 +1,284 @@
+{
+  "status": "completed",
+  "findings": [
+    {
+      "category": "error_handling",
+      "severity": "medium",
+      "file": "tickets/service.py",
+      "line": 45,
+      "title": "ruff BLE001: Do not catch blind exception: `Exception`",
+      "explanation": "Do not catch blind exception: `Exception` (reported by the static-analysis tool ruff, rule BLE001; a deterministic check, not a model's opinion).",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "except Exception:"
+        },
+        {
+          "source": "ticket",
+          "quote": "A failed notification is logged so that operators can see it."
+        },
+        {
+          "source": "code",
+          "quote": "except Exception:\n                pass"
+        },
+        {
+          "source": "code",
+          "quote": "try:\n                self.notifier(assignee, f\"Ticket {ticket.id} was assigned to you: {ticket.title}\")\n            except Exception:\n                pass"
+        }
+      ],
+      "found_by": [
+        "ruff",
+        "compliance",
+        "defects"
+      ],
+      "verification": null,
+      "verification_note": "",
+      "source": "tool"
+    },
+    {
+      "category": "security",
+      "severity": "low",
+      "file": "tickets/service.py",
+      "line": 45,
+      "title": "bandit B110: Try, Except, Pass detected.",
+      "explanation": "Try, Except, Pass detected. (reported by the static-analysis tool bandit, rule B110; a deterministic check, not a model's opinion).",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "except Exception:"
+        }
+      ],
+      "found_by": [
+        "bandit"
+      ],
+      "verification": null,
+      "verification_note": "",
+      "source": "tool"
+    },
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/service.py",
+      "line": 45,
+      "title": "Rule: Never silence an exception",
+      "explanation": "The code catches a broad `Exception` and silently ignores it with `pass`, which violates the team rule that exceptions must not be silenced.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "except Exception:\n    pass"
+        },
+        {
+          "source": "rules",
+          "quote": "Never silence an exception: catch the narrowest type, and log or re-raise it. `except Exception: pass` is not allowed."
+        }
+      ],
+      "found_by": [
+        "standards"
+      ],
+      "verification": "supported",
+      "verification_note": "The code catches a broad `Exception` and silently ignores it with `pass` (lines 45-46), matching the claim.",
+      "source": "llm"
+    },
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/service.py",
+      "line": null,
+      "title": "Rule: Public functions need a docstring",
+      "explanation": "The public method `assign` has type hints but lacks a one-line docstring describing its return value or raised exceptions, violating the team rule for public functions.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def assign(self, ticket_id: int, assignee: str) -> Ticket:"
+        },
+        {
+          "source": "rules",
+          "quote": "Public functions have type hints and a one-line docstring that says what they return or raise."
+        }
+      ],
+      "found_by": [
+        "standards"
+      ],
+      "verification": "supported",
+      "verification_note": "The public method `assign` has type hints but no docstring (definition at line 39), confirming the claim.",
+      "source": "llm"
+    }
+  ],
+  "limitations": [],
+  "error": null,
+  "run": {
+    "revision": {
+      "repository": "ebirdyx/ticket-system-demo",
+      "pr_number": 5,
+      "url": "https://github.com/ebirdyx/ticket-system-demo/pull/5",
+      "base_sha": "31011419c5a58b58220c9be837409de5616c9a2f",
+      "head_sha": "0d0a778a1e05c43e2194a590c7b05c1925095f28"
+    },
+    "case_id": "ebirdyx-ticket-system-demo-pr5-0d0a778",
+    "created_at": "2026-10-13T23:02:51+00:00",
+    "prompt_version": "multi_v2",
+    "model": "gpt-oss:120b",
+    "host": "https://ollama.com",
+    "duration_s": 20.275,
+    "prompt_tokens": 20446,
+    "completion_tokens": 4844,
+    "ticket": "TS-5: Notify the assignee on assignment"
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [],
+  "problems": [],
+  "duplicates_removed": 2,
+  "pipeline": "multi",
+  "passes": [
+    {
+      "name": "compliance",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 4.16,
+      "prompt_tokens": 4545,
+      "completion_tokens": 1138,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "defects",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 4.27,
+      "prompt_tokens": 4097,
+      "completion_tokens": 863,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "security",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.81,
+      "prompt_tokens": 4031,
+      "completion_tokens": 438,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "standards",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 5.16,
+      "prompt_tokens": 3969,
+      "completion_tokens": 1349,
+      "findings": 2,
+      "message": ""
+    },
+    {
+      "name": "verify",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 4.66,
+      "prompt_tokens": 3804,
+      "completion_tokens": 1056,
+      "findings": 0,
+      "message": ""
+    }
+  ],
+  "criteria": [
+    {
+      "number": 1,
+      "text": "When a ticket is assigned, the new assignee is notified.",
+      "verdict": "met",
+      "explanation": "The assign method calls the injected notifier with the assignee and a message, and the test verifies that the notification is sent.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "self.notifier(assignee, f\"Ticket {ticket.id} was assigned to you: {ticket.title}\")"
+        },
+        {
+          "source": "pr_description",
+          "quote": "The new assignee is notified when a ticket is assigned."
+        },
+        {
+          "source": "code",
+          "quote": "assert sent == [(\"bob\", f\"Ticket {ticket.id} was assigned to you: Printer jams\")]"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 44,
+      "severity": "medium"
+    },
+    {
+      "number": 2,
+      "text": "If the notification fails, the assignment still succeeds.",
+      "verdict": "met",
+      "explanation": "The assign method catches any exception from the notifier and still returns the ticket, and the test confirms that assignment succeeds even when the notifier raises.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "except Exception:\n                pass"
+        },
+        {
+          "source": "code",
+          "quote": "assert service.assign(ticket.id, \"bob\").assignee == \"bob\""
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 45,
+      "severity": "medium"
+    },
+    {
+      "number": 3,
+      "text": "A failed notification is logged so that operators can see it.",
+      "verdict": "not_met",
+      "explanation": "The ticket requires that a failed notification be logged, but the code silently swallows the exception without any logging.",
+      "evidence": [
+        {
+          "source": "ticket",
+          "quote": "A failed notification is logged so that operators can see it."
+        },
+        {
+          "source": "code",
+          "quote": "except Exception:\n                pass"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 45,
+      "severity": "medium"
+    }
+  ],
+  "dismissed": [],
+  "tools": [
+    {
+      "name": "ruff",
+      "version": "0.17.0",
+      "status": "ok",
+      "message": "",
+      "files_checked": 2,
+      "total_findings": 1,
+      "findings_on_changed_lines": 1,
+      "duration_s": 0.47
+    },
+    {
+      "name": "bandit",
+      "version": "1.9.4",
+      "status": "ok",
+      "message": "8 warning(s) in test files were ignored (noise in tests)",
+      "files_checked": 2,
+      "total_findings": 1,
+      "findings_on_changed_lines": 1,
+      "duration_s": 2.34
+    }
+  ],
+  "change_profile": {
+    "files_changed": 2,
+    "lines_added": 27,
+    "lines_removed": 1,
+    "languages": {
+      ".py": 2
+    },
+    "source_files": 1,
+    "test_files": 1,
+    "hints": []
+  }
+}

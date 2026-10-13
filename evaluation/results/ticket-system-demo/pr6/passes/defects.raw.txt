@@ -1,0 +1,41 @@
+{
+  "findings": [
+    {
+      "category": "logic_defect",
+      "severity": "medium",
+      "file": "tickets/service.py",
+      "line": 50,
+      "title": "Overdue method includes RESOLVED tickets",
+      "explanation": "The `overdue` method treats tickets with status `RESOLVED` as overdue when their due date is past. Resolved tickets are typically considered completed, so flagging them as overdue can produce false positives.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def overdue(self, today: date | None = None) -> list[Ticket]:"
+        },
+        {
+          "source": "code",
+          "quote": "for status in (Status.OPEN, Status.IN_PROGRESS, Status.RESOLVED)"
+        }
+      ]
+    },
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tests/test_service.py",
+      "line": 1,
+      "title": "Duplicate import of `date` in test module",
+      "explanation": "The diff adds an extra `from datetime import date` line, resulting in two identical import statements. This redundancy does not affect functionality but reduces code cleanliness.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "from datetime import date"
+        },
+        {
+          "source": "code",
+          "quote": "from datetime import date"
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}

@@ -1,0 +1,41 @@
+{
+  "findings": [
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/store.py",
+      "line": 65,
+      "title": "Rule: All SQL uses bound parameters (`?`). Never build SQL with f-strings, `%` or `+`.",
+      "explanation": "The new `search_assignee` method builds its SQL query using an f‑string, directly interpolating the user‑provided `name` value, which violates the rule that all SQL must use bound parameters.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "query = f\"SELECT * FROM tickets WHERE LOWER(assignee) = '{name.lower()}' ORDER BY id\""
+        },
+        {
+          "source": "rules",
+          "quote": "All SQL uses bound parameters (`?`). Never build SQL with f-strings, `%` or `+`."
+        }
+      ]
+    },
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/store.py",
+      "line": 64,
+      "title": "Rule: Public functions have type hints and a one-line docstring that says what they return or raise.",
+      "explanation": "The newly added public method `search_assignee` has type hints but lacks a docstring describing its return value or possible exceptions, violating the documentation rule.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def search_assignee(self, name: str) -> list[Ticket]:"
+        },
+        {
+          "source": "rules",
+          "quote": "Public functions have type hints and a one-line docstring that says what they return or raise."
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}

@@ -1,0 +1,20 @@
+{
+  "verdicts": [
+    {
+      "index": 1,
+      "verdict": "unsupported",
+      "reason": "The overdue method intentionally includes RESOLVED tickets as per its docstring, and the ticket criteria do not require excluding them."
+    },
+    {
+      "index": 2,
+      "verdict": "unsupported",
+      "reason": "The diff adds a single import of `date`; there is no existing identical import, so no duplicate import exists."
+    },
+    {
+      "index": 3,
+      "verdict": "supported",
+      "reason": "The public method `set_due_date` has a one‑line docstring that does not mention its return value or possible exceptions, contrary to the documented rule."
+    }
+  ],
+  "limitations": []
+}

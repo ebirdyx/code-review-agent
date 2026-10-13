@@ -1,0 +1,23 @@
+{
+  "findings": [
+    {
+      "category": "logic_defect",
+      "severity": "high",
+      "file": "tickets/service.py",
+      "line": 44,
+      "title": "Reporter allowed to resolve tickets",
+      "explanation": "The resolve method permits the ticket reporter to resolve a ticket (actor == ticket.reporter) which violates the acceptance criteria that only the assignee or an administrator may resolve a ticket. This can let unauthorized users close tickets.",
+      "evidence": [
+        {
+          "source": "ticket",
+          "quote": "1. Only the assignee or an administrator can resolve a ticket."
+        },
+        {
+          "source": "code",
+          "quote": "if actor != ticket.assignee and actor != ticket.reporter:"
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}

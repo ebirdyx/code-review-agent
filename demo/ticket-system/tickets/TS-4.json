@@ -1,0 +1,10 @@
+{
+  "key": "TS-4",
+  "title": "Restrict who can resolve a ticket",
+  "description": "Reporters were closing their own tickets before the work was done.",
+  "acceptance_criteria": [
+    "Only the assignee or an administrator can resolve a ticket.",
+    "Anyone else who tries gets a PermissionError and the ticket is unchanged.",
+    "Resolving follows the normal workflow (a ticket must be in progress first)."
+  ]
+}

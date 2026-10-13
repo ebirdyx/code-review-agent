@@ -1,0 +1,52 @@
+{
+  "criteria": [
+    {
+      "number": 1,
+      "verdict": "not_met",
+      "explanation": "The code uses a strict greater-than comparison (`> ESCALATION_AGE`) which excludes tickets that are exactly 48 hours old, while the criterion requires escalation for tickets that have existed for 48 hours or more (>= 48 hours).",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "if now - ticket.created_at > ESCALATION_AGE:"
+        },
+        {
+          "source": "ticket",
+          "quote": "1. An open ticket that has existed for 48 hours or more is raised by one priority level."
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 50,
+      "severity": "high"
+    },
+    {
+      "number": 2,
+      "verdict": "met",
+      "explanation": "Urgent tickets have the highest priority in `PRIORITY_ORDER`; the index check prevents increasing priority beyond the last element, so urgent tickets remain urgent.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "index = PRIORITY_ORDER.index(ticket.priority)\nif index < len(PRIORITY_ORDER) - 1:\n    ticket.priority = PRIORITY_ORDER[index + 1]"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 51,
+      "severity": "medium"
+    },
+    {
+      "number": 3,
+      "verdict": "met",
+      "explanation": "The escalation loop only iterates over tickets with status `Status.OPEN`, so tickets that are not open are never considered for escalation.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "for ticket in self.store.list_by_status(Status.OPEN):"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 49,
+      "severity": "medium"
+    }
+  ],
+  "scope_findings": [],
+  "limitations": []
+}

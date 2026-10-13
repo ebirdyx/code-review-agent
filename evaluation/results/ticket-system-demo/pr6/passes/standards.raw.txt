@@ -1,0 +1,41 @@
+{
+  "findings": [
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/service.py",
+      "line": 43,
+      "title": "Rule: public functions must have a docstring that describes what they return or raise",
+      "explanation": "The newly added public method `set_due_date` has a one‑line docstring, but it does not mention the return value or any exceptions, violating the team rule that public functions' docstrings must state what they return or raise.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def set_due_date(self, ticket_id: int, due: date | None) -> Ticket:\n    \"\"\"Set or clear the due date of a ticket.\"\"\"\n    ticket = self.get(ticket_id)\n    ticket.due_date = due\n    self.store.save(ticket)\n    return ticket"
+        },
+        {
+          "source": "rules",
+          "quote": "3. Public functions have type hints and a one-line docstring that says what they return or raise."
+        }
+      ]
+    },
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/service.py",
+      "line": 50,
+      "title": "Rule: public functions must have a docstring that describes what they return or raise",
+      "explanation": "The newly added public method `overdue` has a one‑line docstring, but it does not specify the return type or any raised exceptions, which conflicts with the team rule requiring such information in docstrings.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def overdue(self, today: date | None = None) -> list[Ticket]:\n    \"\"\"Tickets whose due date has passed and that are not closed.\"\"\"\n    today = today or date.today()\n    return [\n        t for status in (Status.OPEN, Status.IN_PROGRESS, Status.RESOLVED)\n        for t in self.store.list_by_status(status)\n        if t.due_date is not None and t.due_date < today\n    ]"
+        },
+        {
+          "source": "rules",
+          "quote": "3. Public functions have type hints and a one-line docstring that says what they return or raise."
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}

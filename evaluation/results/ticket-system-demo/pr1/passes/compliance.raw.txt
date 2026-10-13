@@ -1,0 +1,82 @@
+{
+  "criteria": [
+    {
+      "number": 1,
+      "verdict": "met",
+      "explanation": "The add_comment method accepts any author string without permission checks, allowing any user to add a comment to an existing ticket.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def add_comment(self, ticket_id: int, author: str, body: str) -> Comment:"
+        },
+        {
+          "source": "code",
+          "quote": "service.add_comment(ticket.id, \"bob\", \"first\")\nservice.add_comment(ticket.id, \"carol\", \"second\")"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 42,
+      "severity": "medium"
+    },
+    {
+      "number": 2,
+      "verdict": "met",
+      "explanation": "Empty or whitespace‑only comments are stripped and cause a ValueError, rejecting such inputs.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "body = body.strip()\nif not body:\n    raise ValueError(\"a comment cannot be empty\")"
+        },
+        {
+          "source": "code",
+          "quote": "with pytest.raises(ValueError, match=\"cannot be empty\"):\n    service.add_comment(ticket.id, \"bob\", body)"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 45,
+      "severity": "medium"
+    },
+    {
+      "number": 3,
+      "verdict": "met",
+      "explanation": "MAX_COMMENT is defined as 2000 and the add_comment method raises a ValueError when a comment exceeds this length, enforcing the at‑most‑2000‑character rule.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "MAX_COMMENT = 2000"
+        },
+        {
+          "source": "code",
+          "quote": "if len(body) > MAX_COMMENT:\n    raise ValueError(f\"a comment is at most {MAX_COMMENT} characters\")"
+        },
+        {
+          "source": "code",
+          "quote": "assert service.add_comment(ticket.id, \"bob\", \"x\" * MAX_COMMENT)\nwith pytest.raises(ValueError, match=\"at most\"):\n    service.add_comment(ticket.id, \"bob\", \"x\" * (MAX_COMMENT + 1))"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 10,
+      "severity": "medium"
+    },
+    {
+      "number": 4,
+      "verdict": "met",
+      "explanation": "The comments method returns comments ordered by id via a SQL query with ORDER BY id, which yields the oldest comments first.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "rows = self._db.execute(\"SELECT * FROM comments WHERE ticket_id = ? ORDER BY id\", (ticket_id,)).fetchall()"
+        },
+        {
+          "source": "code",
+          "quote": "assert [c.body for c in service.comments(ticket.id)] == [\"first\", \"second\"]"
+        }
+      ],
+      "file": "tickets/store.py",
+      "line": 88,
+      "severity": "medium"
+    }
+  ],
+  "scope_findings": [],
+  "limitations": []
+}

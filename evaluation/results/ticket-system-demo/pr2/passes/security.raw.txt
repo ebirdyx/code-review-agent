@@ -1,0 +1,21 @@
+{
+  "findings": [
+    {
+      "category": "security",
+      "severity": "low",
+      "file": "tickets/service.py",
+      "line": 45,
+      "title": "Missing authorization check for ticket priority escalation",
+      "explanation": "The public method `escalate_stale` changes ticket priorities without verifying that the caller has permission to perform this operation, allowing any caller to arbitrarily raise ticket priority.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def escalate_stale(self, now: datetime | None = None) -> list[Ticket]:\n    \"\"\"Raise the priority of open tickets that are old enough. Returns the tickets that were changed.\"\"\"\n    now = now or datetime.now(UTC)\n    changed = []\n    for ticket in self.store.list_by_status(Status.OPEN):\n        if now - ticket.created_at > ESCALATION_AGE:\n            index = PRIORITY_ORDER.index(ticket.priority)\n            if index < len(PRIORITY_ORDER) - 1:\n                ticket.priority = PRIORITY_ORDER[index + 1]\n                self.store.save(ticket)\n                changed.append(ticket)\n    return changed"
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "The repository's authentication and role‑based access control mechanisms are not visible, so the exact impact of the missing check cannot be fully determined."
+  ]
+}

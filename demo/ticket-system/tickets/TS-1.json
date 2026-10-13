@@ -1,0 +1,11 @@
+{
+  "key": "TS-1",
+  "title": "Comments on tickets",
+  "description": "Users want to discuss a ticket without editing it.",
+  "acceptance_criteria": [
+    "Any user can add a comment to an existing ticket.",
+    "An empty or whitespace-only comment is rejected.",
+    "A comment is at most 2000 characters.",
+    "A ticket's comments are listed oldest first."
+  ]
+}

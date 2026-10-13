@@ -1,0 +1,9 @@
+{
+  "key": "TS-6",
+  "title": "Due dates and overdue tickets",
+  "description": "Teams need to know which tickets are late.",
+  "acceptance_criteria": [
+    "A ticket can have an optional due date.",
+    "Overdue tickets are flagged."
+  ]
+}

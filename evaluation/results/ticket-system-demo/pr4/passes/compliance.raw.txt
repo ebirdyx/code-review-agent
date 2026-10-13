@@ -1,0 +1,56 @@
+{
+  "criteria": [
+    {
+      "number": 1,
+      "verdict": "not_met",
+      "explanation": "The resolve method allows the reporter to resolve a ticket and does not check the admins set, violating the requirement that only the assignee or an administrator may resolve.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def resolve(self, ticket_id: int, actor: str, admins: frozenset[str] = frozenset()) -> Ticket:\n    \"\"\"Mark a ticket resolved. Raises PermissionError if `actor` is not allowed to.\"\"\"\n    ticket = self.get(ticket_id)\n    if actor != ticket.assignee and actor != ticket.reporter:\n        raise PermissionError(f\"{actor} cannot resolve ticket {ticket_id}\")"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 41,
+      "severity": "high"
+    },
+    {
+      "number": 2,
+      "verdict": "met",
+      "explanation": "When an actor other than the assignee (or reporter) attempts to resolve, the code raises PermissionError before any state change, and the ticket remains unchanged.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "if actor != ticket.assignee and actor != ticket.reporter:\n    raise PermissionError(f\"{actor} cannot resolve ticket {ticket_id}\")"
+        },
+        {
+          "source": "code",
+          "quote": "with pytest.raises(PermissionError):\n    service.resolve(ticket.id, \"mallory\")\nassert service.get(ticket.id).status is Status.IN_PROGRESS"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 44,
+      "severity": "medium"
+    },
+    {
+      "number": 3,
+      "verdict": "met",
+      "explanation": "The resolve method delegates to the workflow's transition function, which enforces that a ticket must be IN_PROGRESS before it can be resolved; the test expects InvalidTransition when this precondition is not met.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "transition(ticket, Status.RESOLVED)"
+        },
+        {
+          "source": "code",
+          "quote": "with pytest.raises(InvalidTransition):\n    service.resolve(ticket.id, \"bob\")"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 46,
+      "severity": "medium"
+    }
+  ],
+  "scope_findings": [],
+  "limitations": []
+}

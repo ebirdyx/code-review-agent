@@ -1,0 +1,213 @@
+{
+  "case_id": "ebirdyx-ticket-system-demo-pr3-60559c2",
+  "created_at": "2026-10-13T23:06:11+00:00",
+  "prompt_version": "multi_v2",
+  "settings": {
+    "provider": "ollama",
+    "profile": "gpt-oss-cloud",
+    "host": "https://ollama.com",
+    "model": "gpt-oss:120b",
+    "key_env": "OLLAMA_API_KEY",
+    "timeout_s": 180.0,
+    "temperature": 0.0,
+    "seed": 42,
+    "num_ctx": null,
+    "num_predict": null,
+    "structured_output": true,
+    "json_mode": true,
+    "max_concurrency": 1
+  },
+  "max_chars": 30000,
+  "pipeline": "multi",
+  "passes": [
+    {
+      "name": "compliance",
+      "prompt_version": "multi_v2",
+      "settings": {
+        "provider": "ollama",
+        "profile": "gpt-oss-cloud",
+        "host": "https://ollama.com",
+        "model": "gpt-oss:120b",
+        "key_env": "OLLAMA_API_KEY",
+        "timeout_s": 180.0,
+        "temperature": 0.0,
+        "seed": 42,
+        "num_ctx": null,
+        "num_predict": null,
+        "structured_output": true,
+        "json_mode": true,
+        "max_concurrency": 1
+      },
+      "skipped": null,
+      "raw_response": "{\n  \"criteria\": [\n    {\n      \"number\": 1,\n      \"verdict\": \"met\",\n      \"explanation\": \"The service provides a `find_by_assignee` method that delegates to the store's `search_assignee`, returning tickets assigned to the given name.\",\n      \"evidence\": [\n        {\n          \"source\": \"code\",\n          \"quote\": \"def find_by_assignee(self, name: str) -> list[Ticket]:\\n    \\\"\\\"\\\"Tickets assigned to `name` (case does not matter); empty if nobody matches.\\\"\\\"\\\"\\n    return self.store.search_assignee(name.strip())\"\n        },\n        {\n          \"source\": \"code\",\n          \"quote\": \"def search_assignee(self, name: str) -> list[Ticket]:\\n    query = f\\\"SELECT * FROM tickets WHERE LOWER(assignee) = '{name.lower()}' ORDER BY id\\\"\\n    rows = self._db.execute(query).fetchall()\\n    return [_from_row(r) for r in rows]\"\n        }\n      ],\n      \"file\": \"tickets/service.py\",\n      \"line\": 41,\n      \"severity\": \"medium\"\n    },\n    {\n      \"number\": 2,\n      \"verdict\": \"met\",\n      \"explanation\": \"The SQL query uses `LOWER(assignee) = '{name.lower()}'`, ensuring the match ignores case.\",\n      \"evidence\": [\n        {\n          \"source\": \"code\",\n          \"quote\": \"query = f\\\"SELECT * FROM tickets WHERE LOWER(assignee) = '{name.lower()}' ORDER BY id\\\"\"\n        }\n      ],\n      \"file\": \"tickets/store.py\",\n      \"line\": 65,\n      \"severity\": \"medium\"\n    },\n    {\n      \"number\": 3,\n      \"verdict\": \"met\",\n      \"explanation\": \"When no ticket matches the assignee name, the query returns no rows and the method returns an empty list; a test asserts this behavior.\",\n      \"evidence\": [\n        {\n          \"source\": \"code\",\n          \"quote\": \"assert service.find_by_assignee(\\\"nobody\\\") == []\"\n        }\n      ],\n      \"file\": \"tests/test_service.py\",\n      \"line\": 61,\n      \"severity\": \"medium\"\n    }\n  ],\n  \"scope_findings\": [],\n  \"limitations\": []\n}",
+      "error": null,
+      "duration_s": 4.219041416,
+      "wall_clock_s": 4.41,
+      "prompt_tokens": 5064,
+      "completion_tokens": 1184,
+      "done_reason": "stop"
+    },
+    {
+      "name": "defects",
+      "prompt_version": "multi_v2",
+      "settings": {
+        "provider": "ollama",
+        "profile": "gpt-oss-cloud",
+        "host": "https://ollama.com",
+        "model": "gpt-oss:120b",
+        "key_env": "OLLAMA_API_KEY",
+        "timeout_s": 180.0,
+        "temperature": 0.0,
+        "seed": 42,
+        "num_ctx": null,
+        "num_predict": null,
+        "structured_output": true,
+        "json_mode": true,
+        "max_concurrency": 1
+      },
+      "skipped": null,
+      "raw_response": "{\n  \"findings\": [\n    {\n      \"category\": \"boundary_condition\",\n      \"severity\": \"medium\",\n      \"file\": \"tickets/store.py\",\n      \"line\": 65,\n      \"title\": \"SQL query built with f-string allows injection or syntax errors on special characters\",\n      \"explanation\": \"The `search_assignee` method constructs the SQL statement using an f-string that directly interpolates the user‑provided `name` after calling `lower()`. If the name contains characters such as a single quote, the resulting query becomes syntactically invalid or could be exploited for SQL injection, causing the function to fail or return incorrect results. Proper parameter binding should be used to handle all input safely.\",\n      \"evidence\": [\n        {\n          \"source\": \"code\",\n          \"quote\": \"query = f\\\"SELECT * FROM tickets WHERE LOWER(assignee) = '{name.lower()}' ORDER BY id\\\"\"\n        },\n        {\n          \"source\": \"code\",\n          \"quote\": \"rows = self._db.execute(query).fetchall()\"\n        }\n      ]\n    }\n  ],\n  \"limitations\": []\n}",
+      "error": null,
+      "duration_s": 4.173043028,
+      "wall_clock_s": 4.3,
+      "prompt_tokens": 4616,
+      "completion_tokens": 911,
+      "done_reason": "stop"
+    },
+    {
+      "name": "security",
+      "prompt_version": "multi_v2",
+      "settings": {
+        "provider": "ollama",
+        "profile": "gpt-oss-cloud",
+        "host": "https://ollama.com",
+        "model": "gpt-oss:120b",
+        "key_env": "OLLAMA_API_KEY",
+        "timeout_s": 180.0,
+        "temperature": 0.0,
+        "seed": 42,
+        "num_ctx": null,
+        "num_predict": null,
+        "structured_output": true,
+        "json_mode": true,
+        "max_concurrency": 1
+      },
+      "skipped": null,
+      "raw_response": "{\n  \"findings\": [\n    {\n      \"category\": \"security\",\n      \"severity\": \"high\",\n      \"file\": \"tickets/store.py\",\n      \"line\": 65,\n      \"title\": \"SQL injection via unparameterized query in search_assignee\",\n      \"explanation\": \"The function builds an SQL statement with an f-string using the raw, lower‑cased user‑supplied name, allowing an attacker to inject arbitrary SQL (e.g., a name containing \\\"' OR 1=1 --\\\").\",\n      \"evidence\": [\n        {\n          \"source\": \"code\",\n          \"quote\": \"query = f\\\"SELECT * FROM tickets WHERE LOWER(assignee) = '{name.lower()}' ORDER BY id\\\"\"\n        },\n        {\n          \"source\": \"code\",\n          \"quote\": \"def find_by_assignee(self, name: str) -> list[Ticket]:\\n        \\\"\\\"\\\"Tickets assigned to `name` (case does not matter); empty if nobody matches.\\\"\\\"\\\"\\n        return self.store.search_assignee(name.strip())\"\n        }\n      ]\n    }\n  ],\n  \"limitations\": []\n}",
+      "error": null,
+      "duration_s": 2.225468659,
+      "wall_clock_s": 2.34,
+      "prompt_tokens": 4550,
+      "completion_tokens": 496,
+      "done_reason": "stop"
+    },
+    {
+      "name": "standards",
+      "prompt_version": "multi_v2",
+      "settings": {
+        "provider": "ollama",
+        "profile": "gpt-oss-cloud",
+        "host": "https://ollama.com",
+        "model": "gpt-oss:120b",
+        "key_env": "OLLAMA_API_KEY",
+        "timeout_s": 180.0,
+        "temperature": 0.0,
+        "seed": 42,
+        "num_ctx": null,
+        "num_predict": null,
+        "structured_output": true,
+        "json_mode": true,
+        "max_concurrency": 1
+      },
+      "skipped": null,
+      "raw_response": "{\n  \"findings\": [\n    {\n      \"category\": \"maintainability\",\n      \"severity\": \"low\",\n      \"file\": \"tickets/store.py\",\n      \"line\": 65,\n      \"title\": \"Rule: All SQL uses bound parameters (`?`). Never build SQL with f-strings, `%` or `+`.\",\n      \"explanation\": \"The new `search_assignee` method builds its SQL query using an f‑string, directly interpolating the user‑provided `name` value, which violates the rule that all SQL must use bound parameters.\",\n      \"evidence\": [\n        {\n          \"source\": \"code\",\n          \"quote\": \"query = f\\\"SELECT * FROM tickets WHERE LOWER(assignee) = '{name.lower()}' ORDER BY id\\\"\"\n        },\n        {\n          \"source\": \"rules\",\n          \"quote\": \"All SQL uses bound parameters (`?`). Never build SQL with f-strings, `%` or `+`.\"\n        }\n      ]\n    },\n    {\n      \"category\": \"maintainability\",\n      \"severity\": \"low\",\n      \"file\": \"tickets/store.py\",\n      \"line\": 64,\n      \"title\": \"Rule: Public functions have type hints and a one-line docstring that says what they return or raise.\",\n      \"explanation\": \"The newly added public method `search_assignee` has type hints but lacks a docstring describing its return value or possible exceptions, violating the documentation rule.\",\n      \"evidence\": [\n        {\n          \"source\": \"code\",\n          \"quote\": \"def search_assignee(self, name: str) -> list[Ticket]:\"\n        },\n        {\n          \"source\": \"rules\",\n          \"quote\": \"Public functions have type hints and a one-line docstring that says what they return or raise.\"\n        }\n      ]\n    }\n  ],\n  \"limitations\": []\n}",
+      "error": null,
+      "duration_s": 4.070472288,
+      "wall_clock_s": 4.2,
+      "prompt_tokens": 4488,
+      "completion_tokens": 1266,
+      "done_reason": "stop"
+    },
+    {
+      "name": "verify",
+      "prompt_version": "multi_v2",
+      "settings": {
+        "provider": "ollama",
+        "profile": "gpt-oss-cloud",
+        "host": "https://ollama.com",
+        "model": "gpt-oss:120b",
+        "key_env": "OLLAMA_API_KEY",
+        "timeout_s": 180.0,
+        "temperature": 0.0,
+        "seed": 42,
+        "num_ctx": null,
+        "num_predict": null,
+        "structured_output": true,
+        "json_mode": true,
+        "max_concurrency": 1
+      },
+      "skipped": null,
+      "raw_response": "{\n  \"verdicts\": [\n    {\n      \"index\": 1,\n      \"verdict\": \"supported\",\n      \"reason\": \"The `search_assignee` method builds the SQL query with an f‑string that directly interpolates the user‑provided name, which can lead to injection or syntax errors on special characters.\"\n    },\n    {\n      \"index\": 2,\n      \"verdict\": \"supported\",\n      \"reason\": \"The method constructs the query using an f‑string instead of bound parameters, which conflicts with the project's requirement to use parameter binding for all SQL.\"\n    },\n    {\n      \"index\": 3,\n      \"verdict\": \"supported\",\n      \"reason\": \"The public function `search_assignee` has type hints but no docstring describing its return value or possible exceptions.\"\n    }\n  ],\n  \"limitations\": []\n}",
+      "error": null,
+      "duration_s": 5.839751274,
+      "wall_clock_s": 5.95,
+      "prompt_tokens": 4528,
+      "completion_tokens": 1515,
+      "done_reason": "stop"
+    }
+  ],
+  "tool_runs": [
+    {
+      "name": "ruff",
+      "version": "0.17.0",
+      "status": "ok",
+      "message": "",
+      "files_checked": 3,
+      "total_findings": 0,
+      "findings_on_changed_lines": 0,
+      "duration_s": 0.48
+    },
+    {
+      "name": "bandit",
+      "version": "1.9.4",
+      "status": "ok",
+      "message": "7 warning(s) in test files were ignored (noise in tests)",
+      "files_checked": 3,
+      "total_findings": 1,
+      "findings_on_changed_lines": 1,
+      "duration_s": 2.38
+    }
+  ],
+  "tool_findings": [
+    {
+      "tool": "bandit",
+      "rule": "B608",
+      "file": "tickets/store.py",
+      "line": 65,
+      "message": "Possible SQL injection vector through string-based query construction.",
+      "severity": "medium",
+      "category": "security",
+      "code_line": "query = f\"SELECT * FROM tickets WHERE LOWER(assignee) = '{name.lower()}' ORDER BY id\"",
+      "on_changed_line": true
+    }
+  ],
+  "revision": {
+    "repository": "ebirdyx/ticket-system-demo",
+    "pr_number": 3,
+    "url": "https://github.com/ebirdyx/ticket-system-demo/pull/3",
+    "base_sha": "31011419c5a58b58220c9be837409de5616c9a2f",
+    "head_sha": "60559c2aa26af2ffe8c6ccc9751feffc69e96237"
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [],
+  "duration_s": 20.528,
+  "wall_clock_s": 21.22,
+  "prompt_tokens": 23246,
+  "completion_tokens": 5372,
+  "done_reason": null,
+  "raw_response": null,
+  "error": null
+}

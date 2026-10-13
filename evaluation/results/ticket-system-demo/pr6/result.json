@@ -1,0 +1,246 @@
+{
+  "status": "completed",
+  "findings": [
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/service.py",
+      "line": 43,
+      "title": "Rule: public functions must have a docstring that describes what they return or raise",
+      "explanation": "The newly added public method `set_due_date` has a one‑line docstring, but it does not mention the return value or any exceptions, violating the team rule that public functions' docstrings must state what they return or raise.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def set_due_date(self, ticket_id: int, due: date | None) -> Ticket:\n    \"\"\"Set or clear the due date of a ticket.\"\"\"\n    ticket = self.get(ticket_id)\n    ticket.due_date = due\n    self.store.save(ticket)\n    return ticket"
+        },
+        {
+          "source": "rules",
+          "quote": "3. Public functions have type hints and a one-line docstring that says what they return or raise."
+        },
+        {
+          "source": "code",
+          "quote": "def overdue(self, today: date | None = None) -> list[Ticket]:\n    \"\"\"Tickets whose due date has passed and that are not closed.\"\"\"\n    today = today or date.today()\n    return [\n        t for status in (Status.OPEN, Status.IN_PROGRESS, Status.RESOLVED)\n        for t in self.store.list_by_status(status)\n        if t.due_date is not None and t.due_date < today\n    ]"
+        }
+      ],
+      "found_by": [
+        "standards"
+      ],
+      "verification": "supported",
+      "verification_note": "The public method `set_due_date` has a one‑line docstring that does not mention its return value or possible exceptions, contrary to the documented rule.",
+      "source": "llm"
+    }
+  ],
+  "limitations": [],
+  "error": null,
+  "run": {
+    "revision": {
+      "repository": "ebirdyx/ticket-system-demo",
+      "pr_number": 6,
+      "url": "https://github.com/ebirdyx/ticket-system-demo/pull/6",
+      "base_sha": "31011419c5a58b58220c9be837409de5616c9a2f",
+      "head_sha": "41791e15375771ff4d2504ca8e5d5069f947a340"
+    },
+    "case_id": "ebirdyx-ticket-system-demo-pr6-41791e1",
+    "created_at": "2026-10-13T23:06:45+00:00",
+    "prompt_version": "multi_v2",
+    "model": "gpt-oss:120b",
+    "host": "https://ollama.com",
+    "duration_s": 24.871,
+    "prompt_tokens": 30710,
+    "completion_tokens": 6346,
+    "ticket": "TS-6: Due dates and overdue tickets"
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [],
+  "problems": [],
+  "duplicates_removed": 1,
+  "pipeline": "multi",
+  "passes": [
+    {
+      "name": "compliance",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 4.03,
+      "prompt_tokens": 6551,
+      "completion_tokens": 927,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "defects",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 9.05,
+      "prompt_tokens": 6103,
+      "completion_tokens": 2396,
+      "findings": 2,
+      "message": ""
+    },
+    {
+      "name": "security",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 3.22,
+      "prompt_tokens": 6037,
+      "completion_tokens": 680,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "standards",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 4.11,
+      "prompt_tokens": 5975,
+      "completion_tokens": 1187,
+      "findings": 2,
+      "message": ""
+    },
+    {
+      "name": "verify",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 5.14,
+      "prompt_tokens": 6044,
+      "completion_tokens": 1156,
+      "findings": 2,
+      "message": ""
+    }
+  ],
+  "criteria": [
+    {
+      "number": 1,
+      "text": "A ticket can have an optional due date.",
+      "verdict": "met",
+      "explanation": "The Ticket model includes an optional due_date field and the service provides set_due_date to set or clear it, satisfying the optional due date requirement.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "due_date: date | None = None"
+        },
+        {
+          "source": "code",
+          "quote": "def set_due_date(self, ticket_id: int, due: date | None) -> Ticket:"
+        }
+      ],
+      "file": "tickets/models.py",
+      "line": 34,
+      "severity": "medium"
+    },
+    {
+      "number": 2,
+      "text": "Overdue tickets are flagged.",
+      "verdict": "met",
+      "explanation": "The service implements an overdue method that returns tickets with a past due date and not closed, and a test verifies that overdue tickets are correctly listed.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def overdue(self, today: date | None = None) -> list[Ticket]:"
+        },
+        {
+          "source": "code",
+          "quote": "if t.due_date is not None and t.due_date < today"
+        },
+        {
+          "source": "code",
+          "quote": "assert [t.id for t in service.overdue(date(2026, 10, 13))] == [late.id]"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 50,
+      "severity": "medium"
+    }
+  ],
+  "dismissed": [
+    {
+      "finding": {
+        "category": "logic_defect",
+        "severity": "medium",
+        "file": "tickets/service.py",
+        "line": 50,
+        "title": "Overdue method includes RESOLVED tickets",
+        "explanation": "The `overdue` method treats tickets with status `RESOLVED` as overdue when their due date is past. Resolved tickets are typically considered completed, so flagging them as overdue can produce false positives.",
+        "evidence": [
+          {
+            "source": "code",
+            "quote": "def overdue(self, today: date | None = None) -> list[Ticket]:"
+          },
+          {
+            "source": "code",
+            "quote": "for status in (Status.OPEN, Status.IN_PROGRESS, Status.RESOLVED)"
+          }
+        ],
+        "found_by": [
+          "defects"
+        ],
+        "verification": null,
+        "verification_note": "",
+        "source": "llm"
+      },
+      "reason": "The overdue method intentionally includes RESOLVED tickets as per its docstring, and the ticket criteria do not require excluding them."
+    },
+    {
+      "finding": {
+        "category": "maintainability",
+        "severity": "low",
+        "file": "tests/test_service.py",
+        "line": 1,
+        "title": "Duplicate import of `date` in test module",
+        "explanation": "The diff adds an extra `from datetime import date` line, resulting in two identical import statements. This redundancy does not affect functionality but reduces code cleanliness.",
+        "evidence": [
+          {
+            "source": "code",
+            "quote": "from datetime import date"
+          },
+          {
+            "source": "code",
+            "quote": "from datetime import date"
+          }
+        ],
+        "found_by": [
+          "defects"
+        ],
+        "verification": null,
+        "verification_note": "",
+        "source": "llm"
+      },
+      "reason": "The diff adds a single import of `date`; there is no existing identical import, so no duplicate import exists."
+    }
+  ],
+  "tools": [
+    {
+      "name": "ruff",
+      "version": "0.17.0",
+      "status": "ok",
+      "message": "",
+      "files_checked": 4,
+      "total_findings": 0,
+      "findings_on_changed_lines": 0,
+      "duration_s": 0.44
+    },
+    {
+      "name": "bandit",
+      "version": "1.9.4",
+      "status": "ok",
+      "message": "9 warning(s) in test files were ignored (noise in tests)",
+      "files_checked": 4,
+      "total_findings": 0,
+      "findings_on_changed_lines": 0,
+      "duration_s": 2.33
+    }
+  ],
+  "change_profile": {
+    "files_changed": 4,
+    "lines_added": 48,
+    "lines_removed": 8,
+    "languages": {
+      ".py": 4
+    },
+    "source_files": 3,
+    "test_files": 1,
+    "hints": []
+  }
+}

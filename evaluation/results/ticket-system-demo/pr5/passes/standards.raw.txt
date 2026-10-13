@@ -1,0 +1,41 @@
+{
+  "findings": [
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/service.py",
+      "line": 45,
+      "title": "Rule: Never silence an exception",
+      "explanation": "The code catches a broad `Exception` and silently ignores it with `pass`, which violates the team rule that exceptions must not be silenced.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "except Exception:\n    pass"
+        },
+        {
+          "source": "rules",
+          "quote": "Never silence an exception: catch the narrowest type, and log or re-raise it. `except Exception: pass` is not allowed."
+        }
+      ]
+    },
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/service.py",
+      "line": null,
+      "title": "Rule: Public functions need a docstring",
+      "explanation": "The public method `assign` has type hints but lacks a one-line docstring describing its return value or raised exceptions, violating the team rule for public functions.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def assign(self, ticket_id: int, assignee: str) -> Ticket:"
+        },
+        {
+          "source": "rules",
+          "quote": "Public functions have type hints and a one-line docstring that says what they return or raise."
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}

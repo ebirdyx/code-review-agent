@@ -1,0 +1,23 @@
+{
+  "findings": [
+    {
+      "category": "security",
+      "severity": "high",
+      "file": "tickets/store.py",
+      "line": 65,
+      "title": "SQL injection via unparameterized query in search_assignee",
+      "explanation": "The function builds an SQL statement with an f-string using the raw, lower‑cased user‑supplied name, allowing an attacker to inject arbitrary SQL (e.g., a name containing \"' OR 1=1 --\").",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "query = f\"SELECT * FROM tickets WHERE LOWER(assignee) = '{name.lower()}' ORDER BY id\""
+        },
+        {
+          "source": "code",
+          "quote": "def find_by_assignee(self, name: str) -> list[Ticket]:\n        \"\"\"Tickets assigned to `name` (case does not matter); empty if nobody matches.\"\"\"\n        return self.store.search_assignee(name.strip())"
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}

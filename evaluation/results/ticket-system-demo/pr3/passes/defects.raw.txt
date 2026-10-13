@@ -1,0 +1,23 @@
+{
+  "findings": [
+    {
+      "category": "boundary_condition",
+      "severity": "medium",
+      "file": "tickets/store.py",
+      "line": 65,
+      "title": "SQL query built with f-string allows injection or syntax errors on special characters",
+      "explanation": "The `search_assignee` method constructs the SQL statement using an f-string that directly interpolates the user‑provided `name` after calling `lower()`. If the name contains characters such as a single quote, the resulting query becomes syntactically invalid or could be exploited for SQL injection, causing the function to fail or return incorrect results. Proper parameter binding should be used to handle all input safely.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "query = f\"SELECT * FROM tickets WHERE LOWER(assignee) = '{name.lower()}' ORDER BY id\""
+        },
+        {
+          "source": "code",
+          "quote": "rows = self._db.execute(query).fetchall()"
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}

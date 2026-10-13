@@ -1,0 +1,19 @@
+{
+  "findings": [
+    {
+      "category": "logic_defect",
+      "severity": "high",
+      "file": "tickets/store.py",
+      "line": 40,
+      "title": "Incorrect indentation of COMMENTS_SCHEMA execution",
+      "explanation": "The line executing COMMENTS_SCHEMA is indented less than the preceding statements inside the __init__ method, causing it to be interpreted outside the method scope. This results in a NameError (self is undefined) or a syntax error, preventing the store from creating the comments table and breaking comment functionality.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "self._db.execute(SCHEMA)\n+        self._db.execute(COMMENTS_SCHEMA)"
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}

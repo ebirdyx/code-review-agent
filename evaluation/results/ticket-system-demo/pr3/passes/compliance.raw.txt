@@ -1,0 +1,52 @@
+{
+  "criteria": [
+    {
+      "number": 1,
+      "verdict": "met",
+      "explanation": "The service provides a `find_by_assignee` method that delegates to the store's `search_assignee`, returning tickets assigned to the given name.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def find_by_assignee(self, name: str) -> list[Ticket]:\n    \"\"\"Tickets assigned to `name` (case does not matter); empty if nobody matches.\"\"\"\n    return self.store.search_assignee(name.strip())"
+        },
+        {
+          "source": "code",
+          "quote": "def search_assignee(self, name: str) -> list[Ticket]:\n    query = f\"SELECT * FROM tickets WHERE LOWER(assignee) = '{name.lower()}' ORDER BY id\"\n    rows = self._db.execute(query).fetchall()\n    return [_from_row(r) for r in rows]"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 41,
+      "severity": "medium"
+    },
+    {
+      "number": 2,
+      "verdict": "met",
+      "explanation": "The SQL query uses `LOWER(assignee) = '{name.lower()}'`, ensuring the match ignores case.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "query = f\"SELECT * FROM tickets WHERE LOWER(assignee) = '{name.lower()}' ORDER BY id\""
+        }
+      ],
+      "file": "tickets/store.py",
+      "line": 65,
+      "severity": "medium"
+    },
+    {
+      "number": 3,
+      "verdict": "met",
+      "explanation": "When no ticket matches the assignee name, the query returns no rows and the method returns an empty list; a test asserts this behavior.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "assert service.find_by_assignee(\"nobody\") == []"
+        }
+      ],
+      "file": "tests/test_service.py",
+      "line": 61,
+      "severity": "medium"
+    }
+  ],
+  "scope_findings": [],
+  "limitations": []
+}

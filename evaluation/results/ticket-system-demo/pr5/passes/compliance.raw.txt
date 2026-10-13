@@ -1,0 +1,64 @@
+{
+  "criteria": [
+    {
+      "number": 1,
+      "verdict": "met",
+      "explanation": "The assign method calls the injected notifier with the assignee and a message, and the test verifies that the notification is sent.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "self.notifier(assignee, f\"Ticket {ticket.id} was assigned to you: {ticket.title}\")"
+        },
+        {
+          "source": "pr_description",
+          "quote": "The new assignee is notified when a ticket is assigned."
+        },
+        {
+          "source": "code",
+          "quote": "assert sent == [(\"bob\", f\"Ticket {ticket.id} was assigned to you: Printer jams\")]"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 44,
+      "severity": "medium"
+    },
+    {
+      "number": 2,
+      "verdict": "met",
+      "explanation": "The assign method catches any exception from the notifier and still returns the ticket, and the test confirms that assignment succeeds even when the notifier raises.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "except Exception:\n                pass"
+        },
+        {
+          "source": "code",
+          "quote": "assert service.assign(ticket.id, \"bob\").assignee == \"bob\""
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 45,
+      "severity": "medium"
+    },
+    {
+      "number": 3,
+      "verdict": "not_met",
+      "explanation": "The ticket requires that a failed notification be logged, but the code silently swallows the exception without any logging.",
+      "evidence": [
+        {
+          "source": "ticket",
+          "quote": "A failed notification is logged so that operators can see it."
+        },
+        {
+          "source": "code",
+          "quote": "except Exception:\n                pass"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 45,
+      "severity": "medium"
+    }
+  ],
+  "scope_findings": [],
+  "limitations": []
+}

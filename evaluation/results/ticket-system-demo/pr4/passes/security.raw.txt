@@ -1,0 +1,27 @@
+{
+  "findings": [
+    {
+      "category": "security",
+      "severity": "medium",
+      "file": "tickets/service.py",
+      "line": 44,
+      "title": "Reporter allowed to resolve tickets, bypassing intended permission model",
+      "explanation": "The resolve method authorizes a user if they are the ticket's assignee OR the reporter, but the ticket's acceptance criteria require only the assignee or an administrator to resolve; this permits reporters to resolve tickets they should not be able to, creating an unauthorized action.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def resolve(self, ticket_id: int, actor: str, admins: frozenset[str] = frozenset()) -> Ticket:"
+        },
+        {
+          "source": "code",
+          "quote": "if actor != ticket.assignee and actor != ticket.reporter:\n    raise PermissionError(f\"{actor} cannot resolve ticket {ticket_id}\")"
+        },
+        {
+          "source": "ticket",
+          "quote": "1. Only the assignee or an administrator can resolve a ticket."
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}

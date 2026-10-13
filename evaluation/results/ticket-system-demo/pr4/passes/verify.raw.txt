@@ -1,0 +1,25 @@
+{
+  "verdicts": [
+    {
+      "index": 1,
+      "verdict": "supported",
+      "reason": "The resolve method checks `actor != ticket.assignee and actor != ticket.reporter`, allowing the reporter and never checking the admins set, contrary to the requirement that only assignee or admin may resolve."
+    },
+    {
+      "index": 2,
+      "verdict": "supported",
+      "reason": "The code permits `actor == ticket.reporter` to resolve, which violates the acceptance criterion that only the assignee or an administrator may resolve."
+    },
+    {
+      "index": 3,
+      "verdict": "supported",
+      "reason": "The implementation authorizes the reporter (and ignores the admins parameter), creating an unauthorized resolution path against the specified criteria."
+    },
+    {
+      "index": 4,
+      "verdict": "unsupported",
+      "reason": "Assessing rule compliance is outside the verifier's scope; only the team-rules specialist should report such violations."
+    }
+  ],
+  "limitations": []
+}

@@ -1,0 +1,23 @@
+{
+  "findings": [
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tests/test_service.py",
+      "line": null,
+      "title": "Rule: every change in behaviour comes with a test, including the boundary values (for example \"exactly 48 hours\")",
+      "explanation": "The new escalation functionality is added, but the test suite does not include a test for the exact 48‑hour boundary, which the team rule requires for any behavioural change.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def test_an_old_open_ticket_is_escalated_one_level(service):\n    ticket = aged(service, 72)\n    assert [t.id for t in service.escalate_stale(NOW)] == [ticket.id]\n    assert service.get(ticket.id).priority is Priority.HIGH\n\n\ndef test_a_recent_ticket_is_left_alone(service):\n    ticket = aged(service, 1)\n    assert service.escalate_stale(NOW) == []\n    assert service.get(ticket.id).priority is Priority.MEDIUM\n\n\ndef test_urgent_stays_urgent(service):\n    ticket = aged(service, 100, Priority.URGENT)\n    assert service.escalate_stale(NOW) == []\n    assert service.get(ticket.id).priority is Priority.URGENT\n\n\ndef test_tickets_that_are_not_open_are_never_escalated(service):\n    ticket = aged(service, 100)\n    service.change_status(ticket.id, Status.IN_PROGRESS)\n    assert service.escalate_stale(NOW) == []"
+        },
+        {
+          "source": "rules",
+          "quote": "Every change in behaviour comes with a test, including the boundary values (for example \"exactly 48 hours\")."
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}

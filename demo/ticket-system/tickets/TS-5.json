@@ -1,0 +1,10 @@
+{
+  "key": "TS-5",
+  "title": "Notify the assignee on assignment",
+  "description": "People do not notice that work was assigned to them.",
+  "acceptance_criteria": [
+    "When a ticket is assigned, the new assignee is notified.",
+    "If the notification fails, the assignment still succeeds.",
+    "A failed notification is logged so that operators can see it."
+  ]
+}

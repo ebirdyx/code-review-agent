@@ -1,0 +1,10 @@
+{
+  "key": "TS-2",
+  "title": "Escalate stale tickets",
+  "description": "Tickets that nobody picks up should become more visible.",
+  "acceptance_criteria": [
+    "An open ticket that has existed for 48 hours or more is raised by one priority level.",
+    "An urgent ticket stays urgent.",
+    "Tickets that are not open (in progress, resolved, closed) are never escalated."
+  ]
+}

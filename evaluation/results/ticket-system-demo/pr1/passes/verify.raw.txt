@@ -1,0 +1,20 @@
+{
+  "verdicts": [
+    {
+      "index": 1,
+      "verdict": "unsupported",
+      "reason": "The COMMENTS_SCHEMA execution line is correctly indented within the __init__ method, matching surrounding statements, so no indentation error exists."
+    },
+    {
+      "index": 2,
+      "verdict": "supported",
+      "reason": "The public method `comments` has a one-line docstring \"Comments of a ticket, oldest first.\" which does not explicitly state what the function returns, matching the claim of a missing return description."
+    },
+    {
+      "index": 3,
+      "verdict": "supported",
+      "reason": "The public method `list_comments` also uses the docstring \"Comments of a ticket, oldest first.\" without explicitly describing its return value, confirming the claim."
+    }
+  ],
+  "limitations": []
+}

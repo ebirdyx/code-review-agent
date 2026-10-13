@@ -1,0 +1,41 @@
+{
+  "findings": [
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/service.py",
+      "line": 53,
+      "title": "Rule: Public functions must have a docstring that says what they return or raise",
+      "explanation": "The public method `comments` has a one-line docstring that does not describe its return value, violating the rule that docstrings must state what the function returns or raises.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "\"\"\"Comments of a ticket, oldest first.\"\"\""
+        },
+        {
+          "source": "rules",
+          "quote": "Public functions have type hints and a one-line docstring that says what they return or raise."
+        }
+      ]
+    },
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/store.py",
+      "line": 88,
+      "title": "Rule: Public functions must have a docstring that says what they return or raise",
+      "explanation": "The public method `list_comments` has a one-line docstring that does not describe its return value, violating the rule that docstrings must state what the function returns or raises.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "\"\"\"Comments of a ticket, oldest first.\"\"\""
+        },
+        {
+          "source": "rules",
+          "quote": "Public functions have type hints and a one-line docstring that says what they return or raise."
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}

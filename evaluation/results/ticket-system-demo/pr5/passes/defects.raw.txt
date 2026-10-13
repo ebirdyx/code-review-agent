@@ -1,0 +1,19 @@
+{
+  "findings": [
+    {
+      "category": "error_handling",
+      "severity": "medium",
+      "file": "tickets/service.py",
+      "line": 45,
+      "title": "Silent swallowing of notification errors without logging",
+      "explanation": "When a notification fails, the exception is caught and ignored (`except Exception: pass`). This prevents any logging or reporting of the failure, violating the requirement to log failed notifications and making debugging difficult.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "try:\n                self.notifier(assignee, f\"Ticket {ticket.id} was assigned to you: {ticket.title}\")\n            except Exception:\n                pass"
+        }
+      ]
+    }
+  ],
+  "limitations": []
+}
