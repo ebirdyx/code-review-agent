@@ -1,0 +1,59 @@
+# Code review agent: reviews every pull request against its Jira ticket and posts ONE comment
+# that is updated on each push. Copy this file to .github/workflows/code-review.yml in the project to review.
+#
+# One-time setup (Settings > Secrets and variables > Actions > New repository secret):
+#   OLLAMA_API_KEY      the model key (required; or the key your chosen profile needs)
+#   JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN   (optional: without them the review runs without a ticket)
+# Optional repository variables: REVIEW_AGENT_PROFILE (model profile), JIRA_PROJECTS (default KAN).
+#
+# What it does NOT do: it never changes code, never approves or blocks a merge, and ignores pull
+# requests from forks (their code could read the secrets). The human reviewer decides.
+
+name: Code review agent
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: code-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true   # a newer push replaces a review that is still running
+
+jobs:
+  review:
+    if: github.event.pull_request.head.repo.full_name == github.repository && !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install the agent
+        run: uv tool install --python 3.12 git+https://github.com/ebirdyx/code-review-agent
+
+      - name: Review the pull request
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          REVIEW_AGENT_PROFILE: ${{ vars.REVIEW_AGENT_PROFILE }}
+          JIRA_PROJECTS: ${{ vars.JIRA_PROJECTS || 'KAN' }}
+          PR_REF: ${{ github.repository }}#${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          jira_args=""
+          if [ -n "$JIRA_API_TOKEN" ]; then jira_args="--jira"; fi
+          review-agent review-pr "$PR_REF" $jira_args --post-comment --report-link "$RUN_URL"
+
+      - name: Keep the full report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-review-report
+          path: runs/
+          if-no-files-found: ignore

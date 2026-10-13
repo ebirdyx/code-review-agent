@@ -1,0 +1,12 @@
+```json
+{
+  "verdicts": [
+    {
+      "index": 1,
+      verdict: "supported",
+      "reason": "The code uses 'if total > 100:', which excludes $100 from free shipping, contradicting the ticket's acceptance criteria that specify free shipping for orders of $100 or more."
+    }
+  ],
+  "limitations": []
+}
+```

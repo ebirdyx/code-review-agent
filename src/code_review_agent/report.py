@@ -53,6 +53,7 @@ def render_markdown(result: ReviewResult) -> str:
                     + (f" ({_line(rev.url)})" if rev.url else "")]
         out += [
             f"- **Case:** {_line(r.case_id)}",
+            f"- **Ticket:** {_line(r.ticket) if r.ticket else 'none: no requirements were available'}",
             f"- **Model:** {_line(r.model)} at {_line(r.host)}",
             f"- **Prompt version:** {_line(r.prompt_version)}",
             f"- **Date (UTC):** {_line(r.created_at)}",
@@ -89,6 +90,26 @@ def render_markdown(result: ReviewResult) -> str:
     elif result.coverage is not None:
         out.append("**Partial coverage.** Some content was not shown to the model.")
     out += [""] + (cov_notes or ["- No missing inputs."]) + [""]
+
+    # --- what kind of change this is (computed without any model)
+    prof = result.change_profile
+    if prof is not None and prof.files_changed:
+        langs = ", ".join(f"{ext} x{n}" for ext, n in sorted(prof.languages.items(), key=lambda kv: -kv[1])[:6])
+        out += ["## Change profile", "",
+                f"{prof.files_changed} file(s) changed, +{prof.lines_added} / -{prof.lines_removed} lines "
+                f"({prof.source_files} source, {prof.test_files} test); file types: {_line(langs)}."]
+        out += [f"- {_line(h)}" for h in prof.hints] + [""]
+
+    # --- static-analysis tools
+    if result.tools:
+        out += ["## Automated checks (static analysis)", "",
+                "Deterministic tools, not a model. A warning on a line this pull request changed is reported as a finding; "
+                "warnings on untouched lines are counted but not blamed on this change.", "",
+                "| Tool | Status | Files | Warnings | On changed lines | Note |", "|---|---|--:|--:|--:|---|"]
+        for t in result.tools:
+            out.append(f"| {_line(t.name)} {_line(t.version or '')} | {t.status} | {t.files_checked} | {t.total_findings} | "
+                       f"{t.findings_on_changed_lines} | {_line(t.message).replace('|', '/')} |")
+        out.append("")
 
     # --- what each specialist pass did (multi-pass pipeline)
     if result.passes:
@@ -194,7 +215,9 @@ def _render_finding(rank: int, f: Finding, problems: list[ValidationProblem]) ->
     ]
     if f.found_by:
         out.append(f"- **Found by:** {_line(', '.join(f.found_by))}")
-    if f.verification:
+    if f.source == "tool":
+        out.append("- **Backed by:** a static-analysis tool (a deterministic check, not put to the verifier's vote)")
+    elif f.verification:
         out.append(f"- **Verification:** {f.verification}" + (f" ({_line(f.verification_note)})" if f.verification_note else ""))
     elif f.verification_note:
         out.append(f"- **Verification:** not verified ({_line(f.verification_note)})")

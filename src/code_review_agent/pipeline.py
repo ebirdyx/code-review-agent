@@ -30,6 +30,16 @@ from pydantic import BaseModel
 
 from .context import DEFAULT_MAX_CHARS, build_user_message
 from .events import EventLog
+from .evidence import (
+    DEFAULT_TOOLS,
+    MAX_REPORTED_FINDINGS,
+    RUFF_SELECT,
+    compute_profile,
+    render_leads,
+    run_static_analysis,
+    select_reportable,
+    tool_findings_to_findings,
+)
 from .model_client import ModelClient, ModelError
 from .review import PassRecord, RunRecord
 from .schemas import (
@@ -57,16 +67,22 @@ from .schemas import (
     VerifyReview,
     public_schema,
 )
-from .validation import InvalidOutput, check_criteria, check_grounding, parse_json_output
+from .validation import DROPPED, InvalidOutput, check_criteria, check_grounding, parse_json_output
 
-MULTI_PROMPT_VERSION = "multi_v1"
-DEFAULT_PASSES = ("compliance", "defects", "security")
+MULTI_PROMPT_VERSION = "multi_v2"  # v1 had no static-analysis or team-rules blocks; it stays loadable
+DEFAULT_PASSES = ("compliance", "defects", "security", "standards")
 PASS_MODELS: dict[str, type[BaseModel]] = {
     "compliance": ComplianceReview,
     "defects": ModelReview,
     "security": ModelReview,
+    "standards": ModelReview,
     "verify": VerifyReview,
 }
+
+
+def _schema_for(name: str) -> dict:
+    """The JSON Schema one pass must follow (only the standards pass may cite the team rules)."""
+    return public_schema(PASS_MODELS[name], allow_rules=(name == "standards"))
 
 _SEVERITY_RANK = {Severity.CRITICAL: 0, Severity.HIGH: 1, Severity.MEDIUM: 2, Severity.LOW: 3}
 # When two reports describe one issue, the more specific category wins.
@@ -91,7 +107,7 @@ def load_pass_system(version: str, name: str) -> str:
     base = resources.files("code_review_agent").joinpath("prompts", version)
     common = base.joinpath("common.md").read_text(encoding="utf-8").rstrip()
     focus = base.joinpath(f"{name}.md").read_text(encoding="utf-8").rstrip()
-    schema = json.dumps(public_schema(PASS_MODELS[name]), indent=1)
+    schema = json.dumps(_schema_for(name), indent=1)
     return (
         f"{common}\n\n{focus}\n\n## Output format\n\n"
         "Reply with a single JSON object and nothing else (no Markdown fences, no commentary). "
@@ -119,6 +135,7 @@ class _Prepared:
     """State after the specialist passes, before verification."""
 
     candidates: list[Finding] = field(default_factory=list)
+    verifiable: list[Finding] = field(default_factory=list)  # the model-only candidates: the verifier's list
     criteria: list[CriterionCheck] = field(default_factory=list)
     summaries: list[PassSummary] = field(default_factory=list)
     limitations: list[str] = field(default_factory=list)
@@ -181,6 +198,7 @@ def merge_candidates(findings: list[Finding]) -> tuple[list[Finding], int]:
                 "severity": min(g.severity, f.severity, key=_SEVERITY_RANK.__getitem__),
                 "evidence": evidence,
                 "found_by": list(dict.fromkeys([*g.found_by, *f.found_by])),
+                "source": "tool" if "tool" in (g.source, f.source) else "llm",  # one tool report makes it tool-backed
             })
             break
         else:
@@ -217,7 +235,12 @@ def _criteria_checks(ticket: Ticket | None, verdicts: list[CriterionVerdict], ou
 def _prepare(record: RunRecord, ticket: Ticket | None, review_input: ReviewInput) -> _Prepared:
     """Parse every specialist pass and build the merged candidate list (verify pass excluded)."""
     out = _Prepared()
-    raw_candidates: list[Finding] = []
+    # Static-analysis warnings on lines the PR changed are findings from the start (deterministic).
+    raw_candidates: list[Finding] = tool_findings_to_findings(record.tool_findings)
+    _, left_out = select_reportable(record.tool_findings)
+    if left_out:
+        out.omitted.append(f"{left_out} further static-analysis warning(s) on changed lines were not reported "
+                           f"(the most serious {MAX_REPORTED_FINDINGS} are shown)")
     for p in record.passes:
         if p.name == "verify":
             continue
@@ -240,7 +263,11 @@ def _prepare(record: RunRecord, ticket: Ticket | None, review_input: ReviewInput
                                              completion_tokens=p.completion_tokens))
             out.omitted.append(f"specialist pass '{p.name}' returned unusable output; its findings are missing")
             continue
-        out.problems += warnings
+        for w in warnings:
+            if w.message.startswith(DROPPED):  # malformed items we discarded: lost coverage, said out loud
+                out.omitted.append(f"specialist pass '{p.name}': {w.message}")
+            else:
+                out.problems.append(w)
         contributed: list[Finding] = []
         if isinstance(parsed, ComplianceReview):
             out.criteria = _criteria_checks(ticket, parsed.criteria, out)
@@ -256,6 +283,7 @@ def _prepare(record: RunRecord, ticket: Ticket | None, review_input: ReviewInput
                                          duration_s=p.wall_clock_s, prompt_tokens=p.prompt_tokens,
                                          completion_tokens=p.completion_tokens))
     out.candidates, out.merged_away = merge_candidates(raw_candidates)
+    out.verifiable = [f for f in out.candidates if f.source == "llm"]  # a tool-backed finding is not up for a vote
     return out
 
 
@@ -279,17 +307,22 @@ def _apply_verification(
         summary.status, summary.message = "failed", f"invalid output: {exc}"
         return candidates, [], summary, [], ["verification returned unusable output; the findings below were NOT double-checked"]
 
-    problems = list(warnings)
+    problems = list(warnings)  # includes any verdicts the parser had to drop: shown as notes
     verdicts: dict[int, object] = {}
     for v in parsed.verdicts:
-        if not 1 <= v.index <= len(candidates):
+        if not 1 <= v.index <= len(prepared.verifiable):
             problems.append(ValidationProblem(kind=ProblemKind.FORMAT_WARNING,
                                               message=f"The verifier judged candidate {v.index}, which does not exist; ignored."))
         else:
             verdicts.setdefault(v.index, v)
     kept: list[Finding] = []
     dismissed: list[DismissedFinding] = []
-    for i, f in enumerate(candidates, 1):
+    i = 0  # the verifier's numbering counts only the model's own candidates
+    for f in candidates:
+        if f.source == "tool":
+            kept.append(f)  # confirmed by a static-analysis tool: not put to a vote
+            continue
+        i += 1
         v = verdicts.get(i)
         if v is None:
             kept.append(f.model_copy(update={"verification_note": "The verifier gave no verdict on this finding."}))
@@ -309,19 +342,26 @@ def assemble_multi(record: RunRecord, ticket: Ticket | None, review_input: Revie
         revision=record.revision, case_id=record.case_id, created_at=record.created_at,
         prompt_version=record.prompt_version, model=record.settings.model, host=record.settings.host,
         duration_s=record.duration_s, prompt_tokens=record.prompt_tokens, completion_tokens=record.completion_tokens,
+        ticket=f"{ticket.key}: {ticket.title}" if ticket else None,
     )
     prepared = _prepare(record, ticket, review_input)
     verify_record = next((p for p in record.passes if p.name == "verify"), None)
     kept, dismissed, verify_summary, verify_problems, verify_omitted = _apply_verification(prepared, verify_record)
 
     summaries = prepared.summaries + ([verify_summary] if verify_summary else [])
-    omitted = prepared.omitted + verify_omitted
+    omitted = prepared.omitted + verify_omitted + [
+        f"static-analysis tool '{t.name}' failed ({t.message}); its findings are missing"
+        for t in record.tool_runs if t.status == "failed"
+    ]
     coverage = Coverage(complete=record.coverage.complete and not omitted, omitted=[*record.coverage.omitted, *omitted])
     common = {"run": run, "coverage": coverage, "missing_inputs": record.missing_inputs,
-              "pipeline": "multi", "passes": summaries}
+              "pipeline": "multi", "passes": summaries, "tools": record.tool_runs,
+              "change_profile": compute_profile(review_input)}
 
     attempted = [s for s in prepared.summaries if s.status != "skipped"]
-    if attempted and all(s.status == "failed" for s in attempted):
+    # Every model pass failed AND no tool produced a finding: nothing can be concluded. (If a tool did
+    # find something, that deterministic result is still worth reporting, with the gap made visible.)
+    if attempted and all(s.status == "failed" for s in attempted) and not prepared.candidates:
         kind = next((e.kind for e in prepared.errors if e.kind != FailureKind.INVALID_OUTPUT),
                     FailureKind.INVALID_OUTPUT)
         detail = "; ".join(f"{s.name}: {s.message}" for s in attempted)
@@ -341,15 +381,28 @@ def assemble_multi(record: RunRecord, ticket: Ticket | None, review_input: Revie
 # ------------------------------------------------------------------------- context text
 
 
-def verify_user_message(ticket: Ticket | None, review_input: ReviewInput, max_chars: int, candidates: list[Finding]) -> str:
+def shared_blocks(record: RunRecord, review_input: ReviewInput) -> dict[str, str]:
+    """Extra fenced blocks every pass receives: the tools' leads, and the team's rules (when there are any)."""
+    blocks: dict[str, str] = {}
+    if record.tool_runs:
+        blocks["STATIC ANALYSIS RESULTS"] = render_leads(record.tool_findings, record.tool_runs)
+    if review_input.rules and review_input.rules.strip():
+        source = f"(from {review_input.rules_source})\n" if review_input.rules_source else ""
+        blocks["TEAM RULES"] = source + review_input.rules.strip()
+    return blocks
+
+
+def verify_user_message(ticket: Ticket | None, review_input: ReviewInput, max_chars: int,
+                        candidates: list[Finding], blocks: dict[str, str] | None = None) -> str:
     user, _, _ = build_user_message(ticket, review_input, max_chars,
-                                    extra_blocks={"CANDIDATE FINDINGS": render_candidates(candidates)})
+                                    extra_blocks={**(blocks or {}), "CANDIDATE FINDINGS": render_candidates(candidates)})
     return user
 
 
 def multi_context_text(record: RunRecord, ticket: Ticket | None, review_input: ReviewInput) -> str:
     """Everything the model was shown, as saved in context.txt. A pure function of record + inputs."""
-    user, _, _ = build_user_message(ticket, review_input, record.max_chars)
+    blocks = shared_blocks(record, review_input)
+    user, _, _ = build_user_message(ticket, review_input, record.max_chars, extra_blocks=blocks)
     parts = [f"=== PIPELINE multi ({record.prompt_version}) ===",
              "=== USER MESSAGE (shared by the specialist passes) ===", user]
     for p in record.passes:
@@ -357,13 +410,22 @@ def multi_context_text(record: RunRecord, ticket: Ticket | None, review_input: R
             parts += [f"=== SYSTEM MESSAGE: {p.name} ===", load_pass_system(p.prompt_version, p.name)]
     verify = next((p for p in record.passes if p.name == "verify" and not p.skipped), None)
     if verify is not None:
-        candidates = _prepare(record, ticket, review_input).candidates
+        candidates = _prepare(record, ticket, review_input).verifiable
         parts += ["=== SYSTEM MESSAGE: verify ===", load_pass_system(verify.prompt_version, "verify"),
-                  "=== USER MESSAGE: verify ===", verify_user_message(ticket, review_input, record.max_chars, candidates)]
+                  "=== USER MESSAGE: verify ===",
+                  verify_user_message(ticket, review_input, record.max_chars, candidates, blocks)]
     return "\n".join(parts) + "\n"
 
 
 # ------------------------------------------------------------------------------ running
+
+
+@dataclass
+class _BlockSource:
+    """The two fields of a run record that `shared_blocks` reads, before the record exists."""
+
+    tool_findings: list
+    tool_runs: list
 
 
 def _peek(name: str, raw: str | None, done_reason: str | None) -> tuple[int | None, str | None]:
@@ -386,7 +448,7 @@ def _call_pass(name: str, client: ModelClient, system: str, user: str, version: 
     events.emit(stage, f"{name}: asking {s.model}", status="start", model=s.model)
     started = time.monotonic()
     try:
-        response = client.complete(system, user, schema=public_schema(PASS_MODELS[name]))
+        response = client.complete(system, user, schema=_schema_for(name))
     except ModelError as exc:
         record.error = ReviewFailure(kind=exc.kind, message=exc.message)
     else:
@@ -421,8 +483,10 @@ def run_multi(
     verify: bool = True,
     verifier_client: ModelClient | None = None,
     events: EventLog | None = None,
+    tools: tuple[str, ...] | list[str] = DEFAULT_TOOLS,
+    ruff_select: str = RUFF_SELECT,
 ) -> tuple[RunRecord, str]:
-    """Run the specialist passes (in parallel up to the provider's limit), then the verifier.
+    """Static analysis, then the specialist passes (in parallel up to the provider's limit), then the verifier.
 
     Returns the run record (with every raw answer) and the exact context text that was sent.
     """
@@ -432,16 +496,31 @@ def run_multi(
     if unknown:
         raise ValueError(f"Unknown pass(es) {unknown}. Choose from: {', '.join(DEFAULT_PASSES)}")
 
+    tool_findings, tool_runs = [], []
+    if tools:
+        with events.step("static_analysis", f"Running static analysis ({', '.join(tools)})") as info:
+            tool_findings, tool_runs = run_static_analysis(review_input, tools, ruff_select)
+            info.update(tools={t.name: t.status for t in tool_runs}, warnings=len(tool_findings),
+                        on_changed_lines=sum(f.on_changed_line for f in tool_findings))
+        for t in tool_runs:
+            if t.status != "ok":
+                events.emit("static_analysis", f"{t.name}: {t.status}, {t.message}", status="warn")
+
+    # A throw-away record only to build the shared blocks; the real one is created below.
+    shared = shared_blocks(_BlockSource(tool_findings, tool_runs), review_input)
     with events.step("build_context", "Assembling the review context") as info:
-        user, missing, coverage = build_user_message(ticket, review_input, max_chars)
+        user, missing, coverage = build_user_message(ticket, review_input, max_chars, extra_blocks=shared)
         info.update(prompt_version=prompt_version, characters=len(user), passes=names,
-                    missing_inputs=len(missing), omitted=len(coverage.omitted), ticket=ticket.key if ticket else None)
+                    missing_inputs=len(missing), omitted=len(coverage.omitted), ticket=ticket.key if ticket else None,
+                    blocks=list(shared))
 
     plan: list[tuple[str, str | None]] = []  # (pass name, reason to skip)
     for name in names:
         reason = None
         if name == "compliance" and (ticket is None or not ticket.acceptance_criteria):
             reason = "no ticket was provided" if ticket is None else f"ticket {ticket.key} has no acceptance criteria to check"
+        if name == "standards" and not (review_input.rules and review_input.rules.strip()):
+            reason = "no team rules were provided (add .review-agent/rules.md to the base branch, or use --rules)"
         plan.append((name, reason))
 
     started = time.monotonic()
@@ -465,20 +544,21 @@ def run_multi(
         settings=client.settings, max_chars=max_chars, pipeline="multi", passes=records,
         revision=ReviewedRevision(repository=pr.repository, pr_number=pr.number, url=pr.url,
                                   base_sha=pr.base_sha, head_sha=pr.head_sha) if pr.head_sha else None,
-        coverage=coverage, missing_inputs=missing,
+        coverage=coverage, missing_inputs=missing, tool_findings=tool_findings, tool_runs=tool_runs,
     )
 
     if verify:
         with events.step("merge", "Merging the specialists' findings") as info:
             prepared = _prepare(record, ticket, review_input)
-            info.update(candidates=len(prepared.candidates), merged_duplicates=prepared.merged_away)
+            info.update(candidates=len(prepared.candidates), tool_backed=len(prepared.candidates) - len(prepared.verifiable),
+                        merged_duplicates=prepared.merged_away)
         vclient = verifier_client or client
-        if prepared.candidates:
+        if prepared.verifiable:
             system = load_pass_system(prompt_version, "verify")
-            vuser = verify_user_message(ticket, review_input, max_chars, prepared.candidates)
+            vuser = verify_user_message(ticket, review_input, max_chars, prepared.verifiable, shared)
             record.passes.append(_call_pass("verify", vclient, system, vuser, prompt_version, events))
         else:
-            reason = "no candidate findings to verify"
+            reason = "no model-reported candidate findings to verify"
             events.emit("pass:verify", f"verify: skipped, {reason}", status="warn")
             record.passes.append(PassRecord(name="verify", prompt_version=prompt_version, settings=vclient.settings, skipped=reason))
 

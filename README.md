@@ -19,13 +19,16 @@ modèle de langage **à poids ouverts** via Ollama, puis produit des constats st
 | Rapports JSON et Markdown | Fait, testé |
 | Banc d'essai (22 cas Python, séparation dev / hold-out, précision, rappel, F1) | Fait. **Étiquettes à valider par un humain** |
 | **Pipeline multi-passes** (par défaut) : 3 spécialistes (conformité au ticket critère par critère, défauts, sécurité), fusion des doublons, puis passe de **vérification** qui peut écarter un constat (toujours visible, avec la raison) | Fait, testé (352 tests dont une exécution réelle avec `gpt-oss:120b`). **Qualité pas encore mesurée** sur le banc d'essai |
-| **Profils de modèles** (`--profile`) : Ollama local ou cloud, Qwen2.5-Coder via un service hébergé compatible OpenAI (OpenRouter) | Fait, testé avec simulation. Exécution réelle d'un profil Qwen **à faire** (nécessite une clé OpenRouter) |
+| **Analyse statique** (Ruff + Bandit, Python) : avertissements déterministes sur les lignes modifiées, fusionnés avec les constats du modèle et fournis aux passes comme pistes | Fait, testé avec les vrais outils et sur une vraie PR (pallets/click) |
+| **Règles d'équipe** (`.review-agent/rules.md` lu sur la branche de base, ou `--rules`) vérifiées par une passe dédiée | Fait, testé (modèle simulé) et sur 4 exécutions réelles |
+| **Profil du changement** (taille, tests modifiés ou non, zones sensibles, dépendances, CI), sans modèle | Fait, testé |
+| **Profils de modèles** (`--profile`) : Ollama local ou cloud, Qwen2.5-Coder via un service hébergé compatible OpenAI (OpenRouter) | Fait. **Exécutions réelles** de Qwen2.5-Coder 32B et Qwen3-Coder 30B via OpenRouter sur la PR de démonstration (voir `docs/model-comparison-notes.md`). Qwen local (Ollama) **pas encore exécuté** |
 | Suivi en direct (événements dans le terminal et `events.jsonl`) et interface web locale (liste des revues, rapport, constats, chronologie, accepter / rejeter chaque constat, lancer une revue de PR) | Fait, testé (serveur réel en local, page vérifiée dans un vrai navigateur) |
 | Lecture d'une Pull Request GitHub (lecture seule, révision exacte enregistrée) | Fait, testé avec simulation et avec l'API réelle (lecture seulement) |
 | Revue d'une PR GitHub + ticket Jira liée, par le modèle | Fait et exécuté pour de vrai (PR `ebirdyx/shipping-demo#1` + `KAN-4`, `gpt-oss:120b`) : voir `evaluation/results/real-pr-demo/` |
 | Tickets Jira (lecture seule, lien PR → ticket, critères d'acceptation, tickets multiples ou indisponibles) | Fait. Testé avec simulation **et sur un vrai site Jira Cloud** (`fetch-ticket KAN-4` : critères lus dans la section de la description). Le cas « champ personnalisé » n'a été testé qu'avec simulation |
-| GitHub Actions / publication de commentaires | **À faire** |
-| Comparaison avec Claude / Gemini | **À faire** |
+| Commentaire unique et auto-mis à jour sur la PR (`--post-comment`) et modèle de workflow GitHub Actions (`integration/code-review.yml`) | Fait et testé (simulation). **Pas encore actif sur un vrai dépôt** : voir « Intégration GitHub Actions » |
+| Comparaison avec Claude / ChatGPT / Gemini | **À faire** : protocole dans `docs/comparison-protocol.md` |
 | Banc d'essai sur un modèle local libre (Qwen2.5-Coder, etc.) | **À faire** (l'outil le permet déjà) |
 
 ## Architecture et responsabilités
@@ -54,6 +57,7 @@ ticket.json  pr.json  change.diff  supporting/        (ou une PR GitHub téléch
 | `model_client.py` | Deux clients derrière la même interface : Ollama et API compatible OpenAI (via LangChain). Adresse, modèle, délai, température, graine configurables. Erreurs classées (connexion, délai, clé, quota, crédit, modèle introuvable). |
 | `profiles.py`, `models.toml` | Profils de modèles nommés et documentés (aucun secret). |
 | `pipeline.py` | Pipeline multi-passes : exécution des spécialistes, fusion, vérification, assemblage pur du résultat. |
+| `evidence.py` | Analyse statique (Ruff, Bandit) en bac à sable, correspondance avec les lignes modifiées, profil du changement. |
 | `service.py`, `events.py` | Le flux de travail partagé par la ligne de commande et l'interface web, et les événements de progression. |
 | `ui.py`, `web/` | Interface web locale. |
 | `review.py` | Un appel au modèle. Conserve la réponse brute, le modèle, la version du prompt, les réglages, la révision revue. |
@@ -69,6 +73,7 @@ Un petit modèle réussit mieux une tâche étroite que « tout relire ». Chaqu
 | Passe | Rôle | Sortie |
 |---|---|---|
 | `compliance` | Compare le code à **chaque critère d'acceptation** du ticket (ignorée sans ticket ni critères) | Un verdict par critère : *met*, *not met* ou *cannot determine*, avec preuves citées |
+| `standards` | Compare les lignes ajoutées aux **règles d'équipe** (ignorée sans fichier de règles) | Constats citant la règle et le code |
 | `defects` | Erreurs de logique, cas limites, gestion d'erreurs, maintenabilité | Constats |
 | `security` | Vulnérabilités concrètes introduites par le changement | Constats |
 | `verify` | Deuxième regard indépendant sur chaque constat candidat | *supported*, *uncertain* ou *unsupported* (écarté, mais **affiché** avec la raison) |
@@ -78,8 +83,34 @@ Une passe qui échoue ou renvoie une réponse inutilisable est signalée (couver
 Les passes tournent en parallèle dans la limite du fournisseur (`max_concurrency` du profil ; 1 pour le palier gratuit d'Ollama Cloud).
 L'assemblage du résultat est une fonction **pure** des réponses enregistrées : `eval-revalidate` peut le refaire sans rappeler le modèle.
 `--pipeline single` conserve l'ancien mode (un seul appel), utilisé pour les premiers résultats d'évaluation.
-Options : `--passes defects,security`, `--no-verify`, `--verifier-profile NOM` (un autre modèle pour la vérification).
+Options : `--passes defects,security`, `--no-verify`, `--verifier-profile NOM` (un autre modèle pour la vérification),
+`--tools ruff,bandit` / `--no-tools`, `--ruff-select F,E9,B`, `--rules fichier.md`.
 Coût : environ 4 fois plus de jetons qu'une seule passe (mesuré : 8171 en entrée / 1910 en sortie contre environ 1900 / 500).
+
+### Preuves sans modèle : analyse statique, règles d'équipe, profil du changement
+
+**Analyse statique.** Avant les passes, [Ruff](https://docs.astral.sh/ruff/) (familles F, E9, B, BLE, PLE, PLW) et [Bandit](https://bandit.readthedocs.io/) analysent les fichiers Python modifiés,
+téléchargés en entier à la révision revue (le modèle, lui, ne voit que les petits fichiers). Les outils **lisent** le code sans l'exécuter, dans un dossier temporaire, sans shell,
+avec un délai maximal, sans lire la configuration de la PR et sans aucune variable d'environnement qui ressemble à un secret.
+
+- Un avertissement sur une ligne **ajoutée ou modifiée** par la PR devient un constat (`source = tool`, preuve = la ligne de code). Il n'est pas soumis au vote du vérificateur.
+- Tous ces avertissements sont aussi donnés aux passes comme **pistes à vérifier** (« une piste n'est pas un verdict »).
+- Les avertissements sur des lignes que la PR n'a pas touchées sont comptés mais jamais imputés à la PR.
+- Contre le bruit : les avertissements de Bandit dans les fichiers de test sont ignorés (mesuré sur la PR réelle pallets/click#3884 : 270 des 276 avertissements étaient des `assert` de tests),
+  et au plus 30 constats d'outils sont rapportés par revue, les plus graves d'abord, avec une note si d'autres ont été laissés de côté.
+- Un outil qui échoue, expire ou ne trouve aucun fichier est signalé (tableau « Automated checks »), jamais ignoré en silence.
+- Mesure sur nos cas synthétiques : sur 16 défauts introduits, Ruff et Bandit en signalent **4** sur la bonne ligne (injection SQL, MD5, `except Exception`, `urlopen`) et aucun sur les 3 changements corrects ;
+  ils ne voient aucun des défauts de logique, de limite ou d'exigence. Les deux approches sont donc complémentaires.
+
+**Règles d'équipe.** Un fichier de règles (voir `examples/review-rules.md`) est lu sur la **branche de base** de la PR (une PR ne peut pas réécrire ses propres règles) :
+`.review-agent/rules.md`, sinon `review-rules.md`. En local : `--rules fichier.md`. La passe `standards` compare les lignes ajoutées à chaque règle et cite la règle mot pour mot.
+Sans règles, la passe est ignorée et le rapport le dit.
+
+**Profil du changement.** Sans modèle : fichiers, lignes, types, « du code source a changé mais aucun test », zones sensibles (auth, paiement, migrations…), dépendances, CI, taille.
+C'est notre équivalent du « rayon d'impact » d'outils comme Qodo.
+
+**Sortie du modèle partiellement invalide.** Si un constat est mal formé (par exemple une étiquette de preuve inconnue), les constats valides sont **conservés** et le constat rejeté est signalé
+(couverture partielle). Si tous les éléments sont invalides, la passe échoue.
 
 ### Ce que la validation prouve (et ne prouve pas)
 
@@ -95,7 +126,7 @@ Prérequis : [uv](https://docs.astral.sh/uv/) (gère Python 3.12 automatiquement
 git clone https://github.com/ebirdyx/code-review-agent.git
 cd code-review-agent
 uv sync
-uv run pytest -q          # 260+ tests, aucun ne nécessite de modèle ni de réseau
+uv run pytest -q          # 440+ tests, aucun ne nécessite de modèle ni de réseau (Ruff et Bandit réels, modèle et GitHub simulés)
 uv run review-agent check-examples
 ```
 
@@ -138,11 +169,17 @@ Définir la clé de façon permanente sous Windows (PowerShell), puis ouvrir un 
 | `qwen3-coder-30b-openrouter` | Qwen3-Coder 30B-A3B | OpenRouter (hébergé) | Apache-2.0 |
 
 On choisit avec `--profile NOM` ou `REVIEW_AGENT_PROFILE=NOM`. Pour ajouter un modèle : un fichier `models.toml` dans le dossier courant (fusionné par-dessus) ; aucune clé n'y est écrite, seulement le **nom** de la variable d'environnement qui la contient.
-Les prix d'OpenRouter (environ 0,66 $ / 1,00 $ par million de jetons pour Qwen2.5-Coder 32B, soit environ 0,002 $ par revue simple) viennent du catalogue public d'OpenRouter en octobre 2026 : à revérifier.
+Les prix d'OpenRouter (environ 0,66 $ / 1,00 $ par million de jetons pour Qwen2.5-Coder 32B) viennent du catalogue public d'OpenRouter en octobre 2026 : à revérifier. Coût **mesuré** sur une PR de 2 lignes (9 000 jetons
+en entrée pour toute la revue multi-passes) : environ 0,006 $ avec Qwen2.5-Coder 32B et 0,001 $ avec Qwen3-Coder 30B.
+**Gratuit** : `gpt-oss:120b` sur le palier gratuit d'Ollama Cloud (limité) ou Qwen en local avec Ollama. Les exécutions Qwen
+de l'équipe ont utilisé OpenRouter (quelques fractions de cent par revue), car le modèle local n'a pas encore été essayé.
 
 **Qwen hébergé** : créer un compte et une clé sur openrouter.ai, la définir (`OPENROUTER_API_KEY`), puis
 `uv run review-agent review-pr proprietaire/depot#12 --jira --profile qwen25-coder-32b-openrouter`.
-Les prompts peuvent être envoyés à des fournisseurs tiers : ne pas y envoyer de code confidentiel.
+**Confidentialité** : avec un profil hébergé (Ollama Cloud, OpenRouter), le diff, les fichiers modifiés et le ticket sont
+envoyés à un tiers (OpenRouter les transmet en plus au fournisseur qui sert le modèle). Seul un modèle **local** garde le code
+sur la machine. Ne pas utiliser un profil hébergé sur du code confidentiel (employeur, client) : voir
+`docs/model-comparison-notes.md`.
 
 ### Utiliser un modèle local (recommandé pour la reproductibilité)
 
@@ -207,7 +244,11 @@ La clé `OLLAMA_API_KEY` doit être définie dans le terminal où l'on lance `ui
    un champ nommé « Acceptance Criteria » (ou « Critères d'acceptation »), **ou** une section de la description
    intitulée « Acceptance criteria » suivie d'une liste. L'outil indique d'où viennent les critères.
 3. Créer un jeton d'API et définir `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` (voir Configuration).
-4. Vérifier : `uv run review-agent fetch-ticket SHOP-1` affiche le titre, le nombre de critères et leur provenance.
+4. Vérifier : `uv run review-agent doctor` teste d'un coup le modèle (clé présente), Jira (« connecté en tant que … »),
+   GitHub (accès et requêtes restantes) et les outils d'analyse statique, sans jamais afficher un secret. Une faute de
+   frappe dans le nom du site Jira est signalée explicitement. Puis `uv run review-agent fetch-ticket SHOP-1` affiche le
+   titre, le nombre de critères et leur provenance. **Ouvrir un nouveau terminal après avoir modifié une variable
+   d'environnement** : les terminaux déjà ouverts gardent l'ancienne valeur.
 5. Lier la PR au ticket. **Convention** : une ligne `Jira: SHOP-1` (ou `Jira: SHOP-1, SHOP-2`) dans la description de la PR,
    ou un titre qui commence par `SHOP-1:` ou `[SHOP-1]`. Avec `JIRA_PROJECTS=SHOP`, toute clé de ce projet dans le titre ou la
    description est reconnue. Sans liste de projets, seuls les liens explicites comptent (pour ne pas prendre « UTF-8 » pour un ticket).
@@ -216,6 +257,24 @@ La clé `OLLAMA_API_KEY` doit être définie dans le terminal où l'on lance `ui
 Cas particuliers, tous signalés dans le rapport et jamais devinés : aucun lien trouvé, ticket introuvable ou inaccessible,
 critères d'acceptation absents, plusieurs tickets (combinés, chaque critère préfixé de sa clé, 5 tickets au maximum).
 `--ticket fichier.json` fournit un ticket à la main et remplace Jira.
+
+## Intégration GitHub Actions et commentaire sur la PR
+
+Le projet à relire appelle lui-même l'agent : le modèle `integration/code-review.yml` se copie dans
+`.github/workflows/code-review.yml`. À chaque ouverture ou mise à jour d'une PR, il lance `review-pr … --post-comment` et
+publie **un seul commentaire**, mis à jour à chaque push (repéré par un marqueur HTML caché), avec la liste des critères
+(MET / NOT MET), les constats triés par gravité et l'avertissement habituel. Le rapport complet est joint au run en artefact.
+
+- Secrets à créer dans le dépôt : `OLLAMA_API_KEY` (ou la clé du profil choisi) et, facultatifs, `JIRA_BASE_URL`, `JIRA_EMAIL`,
+  `JIRA_API_TOKEN`. Variables facultatives : `REVIEW_AGENT_PROFILE`, `JIRA_PROJECTS`.
+- Sécurité : droits minimaux (`contents: read`, `pull-requests: write`), déclencheur `pull_request` (jamais
+  `pull_request_target`), PR venant d'un fork et brouillons ignorés, valeurs non fiables transmises par variables
+  d'environnement. L'agent ne modifie jamais le code, n'approuve ni ne bloque une fusion : l'humain décide.
+- Le texte du modèle est considéré comme non fiable : dans le commentaire, les `@mentions` sont neutralisées, le HTML, les
+  liens et les images sont désactivés, les citations sont dans des blocs de code.
+- Essai à blanc en local : `review-agent review-pr proprietaire/depot#12 --jira` écrit `comment.md` dans le dossier du run
+  sans rien publier ; `--post-comment` (avec `GITHUB_TOKEN`) publie. Une revue en échec est publiée comme telle (« n'a pas
+  abouti »), jamais comme une PR propre.
 
 ## Méthode d'évaluation
 
@@ -245,6 +304,13 @@ Détail : `evaluation/results/dev-eval1.md`.
 
 ## Limites connues
 
+- Le vérificateur a **confirmé tous les constats candidats** dans nos 4 exécutions réelles : son utilité reste à prouver (comparer avec `--no-verify` sur le banc d'essai).
+  Un accord entre deux appels du même modèle n'est pas une preuve d'exactitude.
+- Un même défaut peut apparaître sous plusieurs catégories sur la même ligne (par exemple une injection SQL vue par la sécurité, par les défauts et par une règle d'équipe) : ils ne sont fusionnés que si leurs catégories sont compatibles.
+- La passe `standards` peut être pointilleuse (elle a jugé qu'un docstring ne « disait pas ce que la fonction retourne »).
+- L'analyse statique ne couvre que Python pour l'instant, et seulement les fichiers modifiés disponibles en entier (limite de 500 000 caractères par fichier).
+  Le banc d'essai (22 cas) est aussi 100 % Python : la qualité sur TypeScript, Java, etc. n'a **pas été mesurée** (les passes du modèle lisent le diff
+  et fonctionnent sans analyse statique, mais sans mesure on ne peut rien affirmer).
 - Le pipeline multi-passes (défaut) **n'a pas encore été évalué** sur le banc d'essai : tous les résultats chiffrés ci-dessous viennent du pipeline à une seule passe (`--pipeline single`).
   La vérification peut aussi écarter à tort un vrai constat (il reste visible dans « Dismissed by verification »).
 - Le modèle n'est pas déterministe, même à température 0 : répéter les exécutions (`--repeat`).
@@ -255,7 +321,11 @@ Détail : `evaluation/results/dev-eval1.md`.
   comparer avec un modèle local.
 - Le connecteur Jira a été validé sur un seul site réel (Jira Cloud gratuit, un ticket). Les champs personnalisés de critères
   d'acceptation, les jetons à portée limitée et les tickets multiples n'ont été testés qu'avec des réponses simulées.
-- Pas d'intégration continue, pas de publication de commentaires pour l'instant.
+- Le workflow GitHub Actions et la publication du commentaire sont testés avec simulation, pas encore sur un dépôt réel.
+- Les modèles Qwen se trompent parfois dans la liste des exigences (critère marqué « respecté » alors que le code le viole,
+  vu sur nos deux exécutions Qwen) ; rien ne vérifie encore la cohérence entre la liste et les constats.
+- Qwen2.5-Coder entoure son JSON de balises Markdown et a écrit une fois un nom de champ sans guillemets : l'analyseur le
+  tolère et l'indique dans le rapport.
 
 ## Licences
 
@@ -271,13 +341,29 @@ N'y envoyez pas de code confidentiel.
 
 ## Pour les prochaines équipes
 
+**Démarrage en 10 minutes** : cloner, `uv sync`, `uv run pytest -q`, définir `OLLAMA_API_KEY` (et, pour Jira, les
+trois variables `JIRA_*`), ouvrir un **nouveau** terminal, puis `uv run review-agent doctor` (tout doit afficher OK),
+`uv run review-agent ui --open`, et lancer une revue sur `ebirdyx/shipping-demo#1` (ticket KAN-4) ou sur votre propre PR.
+
+Documents utiles : `docs/model-comparison-notes.md` (observations réelles par modèle), `docs/comparison-protocol.md`
+(comment comparer avec Claude ou ChatGPT, sans clé d'API), `integration/code-review.yml` (workflow GitHub Actions).
+
+À faire, dans l'ordre :
+
 1. Lire ce fichier, puis `src/code_review_agent/schemas.py` (contrats) et `evaluation.py` (grille d'étiquetage).
 2. Valider les réponses attendues et les étiquettes (`reviewed_by`).
-3. Exécuter le banc d'essai avec un modèle local, puis avec Claude ou Gemini, **sur les mêmes cas et la même grille**.
-4. Tester le connecteur Jira sur un vrai site et l'adapter (champ des critères, éventuel jeton à portée limitée).
-5. Ajouter GitHub Actions, puis la publication de commentaires comme fonction **séparée et configurable**.
-6. Ajouter d'autres connecteurs (GitLab, Bitbucket) derrière la même forme `ReviewInput`.
-7. Pistes futures : extraits de code autour des modifications pour les gros fichiers, agents spécialisés, RAG, affinage du modèle.
+3. Mesurer le pipeline multi-passes contre le pipeline simple (`--pipeline single`) et la vérification (`--no-verify`) sur le
+   banc d'essai ; exécuter le *held-out* une seule fois, prompt figé (`--confirm-frozen`).
+4. Essayer Qwen en local (Ollama) et comparer avec Claude / ChatGPT / Gemini **sur les mêmes cas et la même grille**.
+5. Activer le workflow Actions sur un vrai dépôt (secrets, droits `pull-requests: write`) et observer les commentaires.
+6. Vérifier la cohérence entre la liste des exigences et les constats (idée décrite dans `docs/model-comparison-notes.md`).
+7. Ajouter d'autres connecteurs (GitLab, Bitbucket) derrière la même forme `ReviewInput`.
+8. Pistes futures : extraits de code autour des modifications pour les gros fichiers, revue d'une branche locale non
+   poussée, serveur MCP pour les éditeurs, affinage du modèle.
+
+Pièges rencontrés : une variable d'environnement modifiée n'est vue que par un **nouveau** terminal ; une faute de frappe
+dans `JIRA_BASE_URL` donne une erreur de certificat (la commande `doctor` l'explique) ; un serveur `review-agent ui`
+ouvert verrouille `review-agent.exe` sous Windows (`uv sync` échoue tant qu'il tourne).
 
 Un cas ajouté au banc d'essai : créer `evaluation/cases/<id>/` (`ticket.json`, `pr.json`, `change.diff`) et
 `evaluation/expected/<id>.json`, l'ajouter à `evaluation/split.json`, puis `uv run pytest`.

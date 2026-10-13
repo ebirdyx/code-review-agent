@@ -25,7 +25,7 @@ from code_review_agent.jira import (
     split_criteria,
 )
 from code_review_agent.loading import load_example
-from code_review_agent.schemas import Finding, PullRequestMetadata, Ticket
+from code_review_agent.schemas import Finding, PullRequestMetadata, SupportingFile, Ticket
 from code_review_agent.validation import check_grounding
 from test_github import FakeGitHub, HEAD  # reuse the fake GitHub from the Stage 6 tests
 
@@ -274,6 +274,100 @@ def test_unreachable_host_error_names_the_host_the_reason_and_hides_credentials(
     assert "tok-secret" not in message and "me@x.org" not in message
 
 
+def test_a_certificate_error_is_explained_as_a_misspelled_site_name():
+    # The real typo we hit: "pami.braholli" instead of "pamibraholli" gives a cryptic SSL error.
+    def bad_cert(request):
+        raise httpx.ConnectError("[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch")
+
+    client = JiraClient("https://pami.braholli.atlassian.net", "a@b.c", "t", transport=httpx.MockTransport(bad_cert))
+    with pytest.raises(JiraError) as info:
+        client.fetch_issue("KAN-4")
+    assert "probably misspelled" in str(info.value) and "dots included" in str(info.value)
+
+
+def test_whoami_returns_the_account_name_without_touching_a_ticket():
+    fake = FakeJira()
+    fake.issues = {}
+
+    def handler(request):
+        fake.calls.append(request)
+        return httpx.Response(200, json={"displayName": "Pamela B.", "accountId": "123"})
+
+    client = JiraClient("https://site.atlassian.net", "a@b.c", "t", transport=httpx.MockTransport(handler))
+    assert client.whoami() == "Pamela B."
+    assert fake.calls[0].url.path == "/rest/api/3/myself" and len(fake.calls) == 1
+
+
+@pytest.mark.parametrize(("status", "expected"), [(401, "refused the credentials"), (404, "exact site URL"),
+                                                   (403, "exact site URL"), (500, "HTTP 500")])
+def test_whoami_errors_are_actionable(status, expected):
+    with pytest.raises(JiraError, match=expected):
+        jira(FakeJira(status=(status, {}))).whoami()
+
+
+def test_whoami_with_a_non_json_answer_and_an_unreachable_host():
+    def html(request):
+        return httpx.Response(200, content=b"<html>login</html>")
+
+    with pytest.raises(JiraError, match="not JSON"):
+        JiraClient("https://site.atlassian.net", "a@b.c", "t", transport=httpx.MockTransport(html)).whoami()
+
+    def down(request):
+        raise httpx.ConnectError("no route")
+
+    with pytest.raises(JiraError, match="Cannot reach Jira"):
+        JiraClient("https://site.atlassian.net", "a@b.c", "t", transport=httpx.MockTransport(down)).whoami()
+
+
+def test_doctor_reports_each_connection_and_the_exit_code_follows(monkeypatch, capsys):
+    from code_review_agent.github import GitHubClient as RealGitHub
+
+    monkeypatch.setenv("OLLAMA_API_KEY", "k")
+    monkeypatch.setattr(cli, "JiraClient", lambda: JiraClient("https://site.atlassian.net", "a@b.c", "t", transport=httpx.MockTransport(
+        lambda r: httpx.Response(200, json={"displayName": "Pamela B."}))))
+    monkeypatch.setattr(cli, "GitHubClient", lambda: RealGitHub(transport=httpx.MockTransport(
+        lambda r: httpx.Response(200, json={"resources": {"core": {"remaining": 57, "limit": 60}}}))))
+    assert cli.main(["doctor"]) == 0
+    out = capsys.readouterr().out
+    assert "OK     Model" in out and "key OLLAMA_API_KEY is set" in out
+    assert "logged in as 'Pamela B.' at site.atlassian.net" in out
+    assert "57/60 requests left" in out and "no token (public repositories only)" in out
+    assert "ruff" in out and "bandit" in out and "All connections OK." in out
+    assert "t" != "Pamela B."  # the token never appears
+    assert "k\n" not in out
+
+
+def test_doctor_flags_a_missing_key_a_bad_jira_login_and_unreachable_github(monkeypatch, capsys):
+    monkeypatch.delenv("OLLAMA_API_KEY", raising=False)
+    monkeypatch.setattr(cli, "JiraClient", lambda: JiraClient("https://site.atlassian.net", "a@b.c", "secret-token",
+                                                              transport=httpx.MockTransport(lambda r: httpx.Response(401))))
+
+    def github_down(request):
+        raise httpx.ConnectError("no route")
+
+    from code_review_agent.github import GitHubClient as RealGitHub
+
+    monkeypatch.setattr(cli, "GitHubClient", lambda: RealGitHub(transport=httpx.MockTransport(github_down)))
+    assert cli.main(["doctor"]) == 1
+    out = capsys.readouterr().out
+    assert "FAILED Model" in out and "NOT set" in out
+    assert "FAILED Jira" in out and "refused the credentials" in out
+    assert "FAILED GitHub" in out and "Cannot reach GitHub" in out
+    assert "3 problem(s)" in out and "secret-token" not in out
+
+
+def test_doctor_treats_missing_jira_settings_as_optional(monkeypatch, capsys):
+    from code_review_agent.github import GitHubClient as RealGitHub
+
+    monkeypatch.setenv("OLLAMA_API_KEY", "k")
+    for name in ("JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(cli, "GitHubClient", lambda: RealGitHub(transport=httpx.MockTransport(
+        lambda r: httpx.Response(200, json={"resources": {"core": {"remaining": 1, "limit": 60}}}))))
+    assert cli.main(["doctor"]) == 0  # not configured is not a failure
+    assert "n/a    Jira" in capsys.readouterr().out
+
+
 def test_bad_key_syntax_never_reaches_the_network():
     fake = FakeJira()
     with pytest.raises(JiraError, match="not a Jira issue key"):
@@ -429,6 +523,42 @@ def test_fetch_pr_with_jira_saves_pr_and_its_ticket(tmp_path, cli_with_fakes):
     ticket_, review_input = load_example(next(tmp_path.iterdir()))
     assert ticket_.key == "SHOP-1" and ticket_.acceptance_criteria == ["f returns 2"]
     assert review_input.pr.head_sha == HEAD
+
+
+def test_a_failed_jira_lookup_never_reuses_the_ticket_of_an_earlier_fetch(tmp_path, cli_with_fakes, capsys):
+    # Regression (found on a real run): the snapshot folder is named after the commit, so fetching the same PR
+    # twice reuses it. A failing second lookup left the first fetch's ticket.json in place, and the review used
+    # those requirements while its own report claimed they were not used.
+    snaps = tmp_path / "snaps"
+    cli_with_fakes(fake_jira=FakeJira(issues_for("SHOP-1", criteria=("f returns 2",))), fake_github=FakeGitHub())
+    assert cli.main(["fetch-pr", "o/r#7", "--jira", "--jira-projects", "SHOP", "--snapshots", str(snaps)]) == 0
+    folder = next(snaps.iterdir())
+    assert load_example(folder)[0].key == "SHOP-1"
+
+    cli_with_fakes(fake_jira=FakeJira(status=(401, {})), fake_github=FakeGitHub())  # same PR, Jira now broken
+    assert cli.main(["fetch-pr", "o/r#7", "--jira", "--jira-projects", "SHOP", "--snapshots", str(snaps)]) == 0
+    ticket_, review_input = load_example(folder)
+    assert ticket_ is None and not (folder / "ticket.json").exists()  # the stale requirements are gone
+    assert any("SHOP-1 could not be retrieved" in n for n in review_input.input_notes)
+
+
+def test_a_new_fetch_removes_every_leftover_of_the_previous_one(tmp_path):
+    from code_review_agent.github import PullRequestSnapshot
+
+    folder = tmp_path / "snap"
+    old = PullRequestSnapshot(
+        metadata=PullRequestMetadata(title="old", head_sha="a" * 40), diff="diff --git a/a.py b/a.py\n",
+        supporting_files=[SupportingFile(path="old_support.py", content="x")],
+        analysis_files=[SupportingFile(path="old_analysis.py", content="x")], rules="- old rule\n")
+    from code_review_agent.loading import save_snapshot
+
+    save_snapshot(old, folder)
+    (folder / "ticket.json").write_text('{"key": "OLD-1", "title": "stale"}', encoding="utf-8")
+    new = PullRequestSnapshot(metadata=PullRequestMetadata(title="new", head_sha="a" * 40), diff="diff --git a/b.py b/b.py\n")
+    save_snapshot(new, folder)
+    ticket_, review_input = load_example(folder)
+    assert ticket_ is None and review_input.rules is None and review_input.pr.title == "new"
+    assert review_input.supporting_files == [] and review_input.analysis_files == []
 
 
 def test_fetch_pr_with_jira_but_no_link_still_works_and_records_the_gap(tmp_path, cli_with_fakes):

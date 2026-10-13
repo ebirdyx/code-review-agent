@@ -59,6 +59,11 @@ class ReviewInput(StrictModel):
     # Things a connector could NOT retrieve (unavailable patches, files not fetched...).
     # They are shown to the model and reported as partial coverage, never dropped silently.
     input_notes: list[str] = Field(default_factory=list)
+    # Full source of changed files, for the static-analysis tools only (NOT shown to the model).
+    analysis_files: list[SupportingFile] = Field(default_factory=list)
+    # Team coding rules (from the BASE branch, so a PR cannot rewrite its own rules).
+    rules: str | None = None
+    rules_source: str | None = None  # where the rules came from, for the report
 
 
 # -------------------------------------------------------------------------- findings
@@ -83,7 +88,7 @@ class Severity(StrEnum):
 class Evidence(StrictModel):
     """One piece of support for a finding: a quote and where it came from."""
 
-    source: Literal["code", "ticket", "pr_description"]
+    source: Literal["code", "ticket", "pr_description", "rules"]
     quote: str = Field(min_length=1, description="Verbatim text from the source")
 
 
@@ -96,22 +101,31 @@ class Finding(StrictModel):
     explanation: str = Field(min_length=1, description="What behaves wrongly, and why")
     evidence: list[Evidence] = Field(min_length=1)
     # Filled in by our pipeline, never by the model (hidden from the schema the model sees).
-    found_by: list[str] = Field(default_factory=list)  # which specialist passes reported it
+    found_by: list[str] = Field(default_factory=list)  # which passes or tools reported it
     verification: Literal["supported", "uncertain"] | None = None  # verifier's opinion, if it ran
     verification_note: str = ""
+    source: Literal["llm", "tool"] = "llm"  # "tool": backed by a static-analysis finding (not dismissable)
 
 
-INTERNAL_FINDING_FIELDS = ("found_by", "verification", "verification_note")
+INTERNAL_FINDING_FIELDS = ("found_by", "verification", "verification_note", "source")
 WHOLE_CHANGE = "(whole change)"  # `file` value for a finding about the change as a whole
 
 
-def public_schema(model: type[BaseModel]) -> dict:
-    """JSON Schema shown to the model: our internal bookkeeping fields are removed from Finding."""
+def public_schema(model: type[BaseModel], allow_rules: bool = False) -> dict:
+    """JSON Schema shown to the model.
+
+    Our internal bookkeeping fields are removed from Finding, and the evidence source "rules" is
+    only offered to the pass that checks the team rules (so other prompts stay exactly as before).
+    """
     schema = model.model_json_schema()
-    finding = schema.get("$defs", {}).get("Finding")
+    defs = schema.get("$defs", {})
+    finding = defs.get("Finding")
     if finding:
         for name in INTERNAL_FINDING_FIELDS:
             finding.get("properties", {}).pop(name, None)
+    source = defs.get("Evidence", {}).get("properties", {}).get("source")
+    if source and not allow_rules and "rules" in source.get("enum", []):
+        source["enum"] = [v for v in source["enum"] if v != "rules"]
     return schema
 
 
@@ -247,6 +261,45 @@ class PassSummary(StrictModel):
     message: str = ""  # why it failed or was skipped
 
 
+class ToolFinding(StrictModel):
+    """One warning from a static-analysis tool (Ruff, Bandit...). Deterministic, not from the model."""
+
+    tool: str
+    rule: str  # e.g. "S608", "B006"
+    file: str
+    line: int = Field(ge=1)
+    message: str
+    severity: Severity
+    category: Category
+    code_line: str = ""  # the text of that line, used as evidence
+    on_changed_line: bool = False  # True when the PR added or changed this very line
+
+
+class ToolRun(StrictModel):
+    """What one tool did on this review (shown in the report)."""
+
+    name: str
+    version: str | None = None
+    status: Literal["ok", "failed", "skipped"]
+    message: str = ""  # why it failed or was skipped
+    files_checked: int = 0
+    total_findings: int = 0
+    findings_on_changed_lines: int = 0
+    duration_s: float | None = None
+
+
+class ChangeProfile(StrictModel):
+    """Facts about the size and nature of the change, computed without any model."""
+
+    files_changed: int = 0
+    lines_added: int = 0
+    lines_removed: int = 0
+    languages: dict[str, int] = Field(default_factory=dict)  # file extension -> number of files
+    source_files: int = 0
+    test_files: int = 0
+    hints: list[str] = Field(default_factory=list)  # things a reviewer should know first
+
+
 class ReviewedRevision(StrictModel):
     """The exact code revision a review looked at (pull requests only)."""
 
@@ -269,6 +322,7 @@ class RunSummary(StrictModel):
     duration_s: float | None = None
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
+    ticket: str | None = None  # "KEY: title" of the ticket whose requirements were used, or None
 
 
 class ReviewResult(StrictModel):
@@ -297,6 +351,8 @@ class ReviewResult(StrictModel):
     passes: list[PassSummary] = Field(default_factory=list)
     criteria: list[CriterionCheck] = Field(default_factory=list)  # requirements checklist
     dismissed: list[DismissedFinding] = Field(default_factory=list)  # judged unsupported by the verifier
+    tools: list[ToolRun] = Field(default_factory=list)  # static-analysis tools that ran (or why not)
+    change_profile: ChangeProfile | None = None
 
     @model_validator(mode="after")
     def _status_matches_content(self) -> Self:

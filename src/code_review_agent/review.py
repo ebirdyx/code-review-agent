@@ -15,7 +15,7 @@ from pydantic import Field
 from .context import DEFAULT_PROMPT_VERSION, Coverage, build_context
 from .events import EventLog
 from .model_client import ModelClient, ModelError, ModelSettings
-from .schemas import ReviewedRevision, ReviewFailure, ReviewInput, StrictModel, Ticket
+from .schemas import ReviewedRevision, ReviewFailure, ReviewInput, StrictModel, Ticket, ToolFinding, ToolRun
 
 
 class PassRecord(StrictModel):
@@ -44,6 +44,8 @@ class RunRecord(StrictModel):
     max_chars: int
     pipeline: Literal["single", "multi"] = "single"
     passes: list[PassRecord] = Field(default_factory=list)  # multi-pass pipeline only
+    tool_runs: list[ToolRun] = Field(default_factory=list)  # static-analysis tools (multi-pass only)
+    tool_findings: list[ToolFinding] = Field(default_factory=list)  # every warning they raised, changed line or not
     revision: ReviewedRevision | None = None  # set for pull-request reviews
     coverage: Coverage
     missing_inputs: list[str] = Field(default_factory=list)

@@ -215,22 +215,42 @@ class JiraClient:
             follow_redirects=False,  # never forward credentials to another host
         )
 
+    def _get(self, path: str, params: dict | None, what: str) -> httpx.Response:
+        """One GET. Network problems become a JiraError that says what is probably wrong."""
+        try:
+            return self._http.get(path, params=params)
+        except httpx.TimeoutException as exc:
+            raise JiraError(f"Jira did not answer in time for {what}.") from exc
+        except httpx.HTTPError as exc:
+            reason = str(exc) or type(exc).__name__
+            if "CERTIFICATE_VERIFY_FAILED" in reason or "Hostname mismatch" in reason or "certificate" in reason.lower():
+                hint = (f" The address does not match a real Jira site: the site name in {BASE_URL_ENV} is probably misspelled "
+                        "(compare it letter by letter, dots included, with the address in your browser).")
+            elif "getaddrinfo" in reason or "Name or service not known" in reason or "11001" in reason:
+                hint = (f" The host name could not be resolved: check the spelling of the site name in "
+                        f"{BASE_URL_ENV}, or your network/VPN/proxy.")
+            else:
+                hint = f" Check {BASE_URL_ENV}, your network, VPN or proxy."
+            raise JiraError(f"Cannot reach Jira at {self._host} ({type(exc).__name__}: {reason}).{hint}") from exc
+
+    def whoami(self) -> str:
+        """Check the address and credentials without touching any ticket. Returns the account's display name."""
+        response = self._get("/rest/api/3/myself", None, "your account")
+        if response.status_code == 401:
+            raise JiraError(f"Jira refused the credentials (401). Check {EMAIL_ENV} and {TOKEN_ENV}.")
+        if response.status_code in (403, 404):
+            raise JiraError(f"{self._host} answered {response.status_code} for the account check: is {BASE_URL_ENV} the exact site URL?")
+        if response.status_code >= 300:
+            raise JiraError(f"Jira returned HTTP {response.status_code} for the account check.")
+        try:
+            return str(response.json().get("displayName") or "(unnamed account)")
+        except ValueError as exc:
+            raise JiraError(f"Jira returned something that is not JSON. Check {BASE_URL_ENV} (it must be the site URL).") from exc
+
     def fetch_issue(self, key: str) -> JiraIssue:
         if not re.fullmatch(_KEY, key):
             raise JiraError(f"'{key}' is not a Jira issue key (expected something like SHOP-42).")
-        try:
-            response = self._http.get(f"/rest/api/3/issue/{key}", params={"fields": "*all", "expand": "names"})
-        except httpx.TimeoutException as exc:
-            raise JiraError(f"Jira did not answer in time for {key}.") from exc
-        except httpx.HTTPError as exc:
-            reason = str(exc) or type(exc).__name__
-            hint = (
-                " The host name could not be resolved: check the spelling of the site name in "
-                f"{BASE_URL_ENV}, or your network/VPN/proxy."
-                if "getaddrinfo" in reason or "Name or service not known" in reason or "11001" in reason
-                else f" Check {BASE_URL_ENV}, your network, VPN or proxy."
-            )
-            raise JiraError(f"Cannot reach Jira at {self._host} ({type(exc).__name__}: {reason}).{hint}") from exc
+        response = self._get(f"/rest/api/3/issue/{key}", {"fields": "*all", "expand": "names"}, key)
         if response.status_code >= 300:
             raise self._error(key, response)
         try:

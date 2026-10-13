@@ -53,7 +53,7 @@ model = "qwen/qwen-2.5-coder-32b-instruct"
 key_env = "OPENROUTER_API_KEY"
 max_concurrency = 3
 licence = "Apache-2.0"
-notes = "Hosted Qwen2.5-Coder 32B. About $0.66 per million input and $1.00 per million output tokens (OpenRouter catalogue, October 2026), roughly $0.002 per review."
+notes = "Hosted Qwen2.5-Coder 32B. About $0.66 per million input and $1.00 per million output tokens (OpenRouter catalogue, October 2026), about $0.006 for a 2-line pull request (measured, 9k tokens in), more for larger ones."
 
 [profiles.qwen3-coder-30b-openrouter]
 provider = "openai-compatible"

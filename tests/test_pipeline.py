@@ -75,6 +75,8 @@ def pass_of(system: str) -> str:
         return "defects"
     if "Your focus: security" in system:
         return "security"
+    if "Your focus: team rules" in system:
+        return "standards"
     if "Your focus: verification" in system:
         return "verify"
     raise AssertionError("unrecognised pass prompt")
@@ -155,8 +157,10 @@ def test_requirements_checklist_uses_the_tickets_wording_and_the_models_verdicts
 def test_pass_summaries_show_status_model_and_tokens():
     _, _, result, _, _, _ = run()
     assert [(p.name, p.status) for p in result.passes] == [
-        ("compliance", "ok"), ("defects", "ok"), ("security", "ok"), ("verify", "ok")]
-    assert all(p.model == "scripted" and p.prompt_tokens == 100 for p in result.passes)
+        ("compliance", "ok"), ("defects", "ok"), ("security", "ok"), ("standards", "skipped"), ("verify", "ok")]
+    assert "no team rules" in next(p for p in result.passes if p.name == "standards").message
+    ran = [p for p in result.passes if p.status == "ok"]
+    assert all(p.model == "scripted" and p.prompt_tokens == 100 for p in ran)
 
 
 def test_run_record_keeps_every_raw_answer_and_sums_the_totals():
@@ -291,6 +295,47 @@ def test_truncated_output_mentions_the_token_limit():
     next(p for p in record.passes if p.name == "defects").done_reason = "length"
     result = assemble_multi(record, ticket, review_input)
     assert "token limit" in next(p for p in result.passes if p.name == "defects").message
+
+
+# ============================================== a malformed item must not sink its pass
+
+
+REAL_DEFECTS_ONE_BAD = (ROOT / "tests/fixtures/raw/real-gpt-oss-defects-one-bad-source.json").read_text(encoding="utf-8")
+
+
+def test_a_pass_with_one_malformed_finding_keeps_its_valid_findings_and_says_what_was_lost():
+    ticket, review_input = load_example(ROOT / "evaluation" / "cases" / "password-min-length")
+    client = ScriptedClient({"compliance": j(criteria=[verdict(1, "cannot_determine", "x"), verdict(2, "cannot_determine", "y")]),
+                             "defects": REAL_DEFECTS_ONE_BAD, "security": j(findings=[]),
+                             "standards": j(findings=[]),
+                             "verify": j(verdicts=[{"index": 1, "verdict": "supported", "reason": "ok"}])})
+    record, _ = run_multi("c", ticket, review_input, client, tools=())
+    result = finalize_review(record, ticket, review_input)
+    defects = next(p for p in result.passes if p.name == "defects")
+    assert defects.status == "ok" and defects.findings == 1  # the pass is NOT discarded
+    assert [f.line for f in result.findings] == [11] and result.findings[0].found_by == ["defects"]
+    assert not result.coverage.complete
+    assert any("specialist pass 'defects': Dropped findings[1]" in o for o in result.coverage.omitted)
+
+
+def test_a_malformed_verdict_is_dropped_and_its_candidate_is_kept_unverified():
+    verify = '{"verdicts": [{"index": 1, "verdict": "perhaps", "reason": "hmm"}, {"index": 2, "verdict": "supported", "reason": "ok"}]}'
+    two = j(findings=[finding(title="A", line=6), finding(title="B", line=7, category="logic_defect")])
+    _, _, result, _, _, _ = run({"defects": two, "compliance": j(criteria=[verdict(1, "cannot_determine", "x"),
+                                                                        verdict(2, "cannot_determine", "y")]), "verify": verify})
+    by_title = {f.title: f for f in result.findings}
+    assert by_title["A"].verification is None and "no verdict" in by_title["A"].verification_note
+    assert by_title["B"].verification == "supported"
+    assert any("Dropped verdicts[0]" in p.message for p in result.problems)
+
+
+def test_a_criterion_whose_verdict_was_malformed_shows_as_cannot_determine():
+    bad = ('{"criteria": [{"number": 1, "verdict": "kinda", "explanation": "x"}, '
+           '{"number": 2, "verdict": "met", "explanation": "ok", "evidence": [{"source": "code", "quote": "return SHIPPING_FEE"}]}]}')
+    _, _, result, _, _, _ = run({"compliance": bad, "defects": j(findings=[]), "verify": j(verdicts=[])})
+    assert [c.verdict for c in result.criteria] == ["cannot_determine", "met"]
+    assert any(p.kind == ProblemKind.MISSING_VERDICT and p.criterion_index == 0 for p in result.problems)
+    assert any("Dropped criteria[0]" in o for o in result.coverage.omitted)
 
 
 # =================================================================== skipping and choosing
@@ -559,7 +604,8 @@ def test_report_shows_pipeline_passes_checklist_and_verification():
 
     _, _, result, _, _, _ = run()
     text = render_markdown(result)
-    assert "**Pipeline:** multi-pass (compliance, defects, security, verify)" in text
+    assert "**Pipeline:** multi-pass (compliance, defects, security, standards, verify)" in text
+    assert "| standards | skipped |" in text and "no team rules" in text
     assert "## Specialist passes" in text and "| compliance | ok |" in text and "| verify | ok |" in text
     assert "## Requirements checklist" in text
     assert "### 1. NOT MET: Orders of $100 or more ship for free." in text

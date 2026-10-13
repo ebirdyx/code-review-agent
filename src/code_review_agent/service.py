@@ -13,6 +13,7 @@ from pathlib import Path
 
 from .context import DEFAULT_PROMPT_VERSION
 from .events import EventLog
+from .evidence import DEFAULT_TOOLS, RUFF_SELECT
 from .github import GitHubClient, PullRequestSnapshot, parse_pr_reference
 from .jira import PROJECTS_ENV, JiraClient, resolve_ticket
 from .loading import load_example, save_snapshot
@@ -32,14 +33,17 @@ class PRFetchOptions:
     ticket_file: Path | None = None
     max_files: int = 100
     with_source: bool = True
+    with_analysis: bool = True  # also download full changed Python files for the static-analysis tools
+    with_rules: bool = True  # read team rules from the base commit
 
     @classmethod
     def from_cli(cls, jira=False, jira_projects: str | None = None, ticket_keys=None, ticket_file=None,
-                 max_files=100, no_source=False) -> PRFetchOptions:
+                 max_files=100, no_source=False, no_tools=False) -> PRFetchOptions:
         raw = jira_projects or os.environ.get(PROJECTS_ENV, "")
         return cls(
             jira=jira, jira_projects=[p.strip() for p in raw.split(",") if p.strip()],
             ticket_keys=ticket_keys, ticket_file=ticket_file, max_files=max_files, with_source=not no_source,
+            with_analysis=not no_tools,
         )
 
 
@@ -66,11 +70,13 @@ def fetch_snapshot(
 
     with events.step("fetch_pr", f"Reading {repository}#{number} from GitHub", repository=repository, number=number) as info:
         snapshot = github().fetch_pull_request(
-            repository, number, max_files=options.max_files, with_source=options.with_source
+            repository, number, max_files=options.max_files, with_source=options.with_source,
+            with_analysis=options.with_analysis, with_rules=options.with_rules,
         )
         meta = snapshot.metadata
         info.update(head_sha=meta.head_sha, files=snapshot.diff.count("diff --git"),
-                    source_files=len(snapshot.supporting_files), not_retrieved=len(snapshot.notes))
+                    source_files=len(snapshot.supporting_files), analysis_files=len(snapshot.analysis_files),
+                    team_rules=bool(snapshot.rules), not_retrieved=len(snapshot.notes))
     for note in snapshot.notes:
         events.emit("fetch_pr", note, status="warn")
 
@@ -134,11 +140,16 @@ def review_folder(
     passes: list[str] | None = None,
     verify: bool = True,
     verifier_client: ModelClient | None = None,
+    tools: tuple[str, ...] | list[str] = DEFAULT_TOOLS,
+    ruff_select: str = RUFF_SELECT,
+    rules_file: Path | None = None,
 ) -> tuple[Path, ReviewResult, str]:
     """Review one example folder (a local example or a downloaded PR) and save everything.
 
-    pipeline "multi": specialist passes (compliance, defects, security) + a verifier.
+    pipeline "multi": static analysis, specialist passes (compliance, defects, security, team rules)
+                      and a verifier.
     pipeline "single": one model call with one prompt (the baseline used for the first evaluation).
+    `rules_file` overrides the team rules found in the folder (local use).
     """
     if pipeline not in ("single", "multi"):
         raise ValueError(f"Unknown pipeline '{pipeline}' (choose single or multi)")
@@ -146,13 +157,18 @@ def review_folder(
     case_id = case_id or example.name
     with events.step("load_input", f"Loading {example.name}") as info:
         ticket, review_input = load_example(example)
+        if rules_file is not None:
+            review_input = review_input.model_copy(
+                update={"rules": rules_file.read_text(encoding="utf-8"), "rules_source": str(rules_file)})
         info.update(ticket=ticket.key if ticket else None, diff_lines=len(review_input.diff.splitlines()),
-                    supporting_files=len(review_input.supporting_files))
+                    supporting_files=len(review_input.supporting_files), analysis_files=len(review_input.analysis_files),
+                    team_rules=bool(review_input.rules))
     folder = new_run_folder(runs_dir, case_id)
     events.attach(folder / "events.jsonl")
     if pipeline == "multi":
         record, sent = run_multi(case_id, ticket, review_input, client, max_chars,
-                                 prompt_version or MULTI_PROMPT_VERSION, passes, verify, verifier_client, events)
+                                 prompt_version or MULTI_PROMPT_VERSION, passes, verify, verifier_client, events,
+                                 tools=tools, ruff_select=ruff_select)
     else:
         record, sent = run_review(case_id, ticket, review_input, client, max_chars,
                                   prompt_version or DEFAULT_PROMPT_VERSION, events=events)

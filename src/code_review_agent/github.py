@@ -27,7 +27,11 @@ from .schemas import PullRequestMetadata, ReviewInput, SupportingFile
 API_URL = "https://api.github.com"
 TOKEN_ENV = "GITHUB_TOKEN"
 PAGE_SIZE = 100
-MAX_SOURCE_CHARS = 20_000  # per supporting file
+MAX_SOURCE_CHARS = 20_000  # per supporting file (what the model sees)
+MAX_ANALYSIS_CHARS = 500_000  # per file given to the static-analysis tools
+MAX_ANALYSIS_FILES = 40
+MAX_RULES_CHARS = 20_000
+RULES_PATHS = (".review-agent/rules.md", "review-rules.md")  # looked up at the base commit, in this order
 SKIP_SOURCE_SUFFIXES = (".lock", ".min.js", ".min.css", ".map", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".pdf", ".zip")
 SKIP_SOURCE_NAMES = {"package-lock.json", "yarn.lock", "poetry.lock", "uv.lock", "pnpm-lock.yaml"}
 
@@ -36,6 +40,10 @@ _PR_REF = re.compile(r"^(?:https://github\.com/)?(?P<repo>[\w.-]+/[\w.-]+?)(?:/p
 
 class GitHubError(Exception):
     """A GitHub request failed in a way the user can act on. The message says how."""
+
+    def __init__(self, message: str, status: int | None = None):
+        super().__init__(message)
+        self.status = status  # the HTTP status, when the failure was an HTTP one
 
 
 def parse_pr_reference(text: str) -> tuple[str, int]:
@@ -55,11 +63,15 @@ class PullRequestSnapshot:
     supporting_files: list[SupportingFile] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)  # what could not be retrieved
     info: list[str] = field(default_factory=list)  # shown to the user only (e.g. the PR is closed)
+    analysis_files: list[SupportingFile] = field(default_factory=list)  # full changed .py files, for the tools
+    rules: str | None = None  # team rules read from the BASE commit
+    rules_source: str | None = None
 
     def to_review_input(self) -> ReviewInput:
         return ReviewInput(
             pr=self.metadata, diff=self.diff,
             supporting_files=self.supporting_files, input_notes=self.notes,
+            analysis_files=self.analysis_files, rules=self.rules, rules_source=self.rules_source,
         )
 
 
@@ -110,14 +122,14 @@ class GitHubClient:
     def _error(self, response: httpx.Response) -> GitHubError:
         code = response.status_code
         if code == 401:
-            return GitHubError(f"GitHub refused the token (401). Check {TOKEN_ENV}.")
+            return GitHubError(f"GitHub refused the token (401). Check {TOKEN_ENV}.", code)
         if code in (403, 429) and response.headers.get("X-RateLimit-Remaining") == "0":
             hint = "" if self.authenticated else f" Set {TOKEN_ENV} to raise the limit (60 requests/hour without a token)."
-            return GitHubError(f"GitHub rate limit reached.{hint}")
+            return GitHubError(f"GitHub rate limit reached.{hint}", code)
         if code == 404:
             hint = "" if self.authenticated else f" Private repositories need {TOKEN_ENV}."
-            return GitHubError(f"Not found (404): the repository or pull request does not exist or is not visible.{hint}")
-        return GitHubError(f"GitHub returned HTTP {code}.")
+            return GitHubError(f"Not found (404): the repository or pull request does not exist or is not visible.{hint}", code)
+        return GitHubError(f"GitHub returned HTTP {code}.", code)
 
     def _paginate(self, path: str, limit: int) -> tuple[list[dict], bool]:
         """Follow Link: rel=next pages. Returns (items, more_exist_beyond_limit)."""
@@ -136,6 +148,46 @@ class GitHubClient:
 
     # --------------------------------------------------------------------- public
 
+    def _send(self, method: str, path: str, payload: dict) -> httpx.Response:
+        """The only write path of this client (comments). Needs a token with permission to comment."""
+        if not self.authenticated:
+            raise GitHubError(f"Posting a comment needs a token: set {TOKEN_ENV}.")
+        try:
+            response = self._http.request(method, path, json=payload)
+        except httpx.TimeoutException as exc:
+            raise GitHubError("GitHub did not answer in time.") from exc
+        except httpx.HTTPError as exc:
+            raise GitHubError(f"Cannot reach GitHub: {type(exc).__name__}.") from exc
+        if response.status_code < 300:
+            return response
+        if response.status_code == 403:
+            raise GitHubError("GitHub refused to write the comment (403): the token needs 'pull-requests: write' "
+                              "(in a workflow, add it under `permissions:`).", 403)
+        raise self._error(response)
+
+    def upsert_comment(self, repository: str, number: int, body: str, marker: str) -> tuple[str, str]:
+        """Create the review comment, or update the one this tool wrote earlier (found by its hidden `marker`).
+
+        Returns ("created" | "updated", comment url). Never touches comments that do not start with the marker.
+        """
+        base = f"/repos/{repository}/issues"
+        comments, _ = self._paginate(f"{base}/{number}/comments", limit=1000)
+        for c in comments:
+            if str(c.get("body", "")).startswith(marker) and c.get("id"):
+                try:
+                    done = self._send("PATCH", f"{base}/comments/{c['id']}", {"body": body})
+                    return "updated", str(done.json().get("html_url", ""))
+                except GitHubError as exc:
+                    if exc.status != 403:  # somebody else's comment that copies our marker: leave it, write our own
+                        raise
+        done = self._send("POST", f"{base}/{number}/comments", {"body": body})
+        return "created", str(done.json().get("html_url", ""))
+
+    def rate_limit(self) -> tuple[int, int]:
+        """(requests left, requests allowed per hour). Also proves that GitHub is reachable and the token works."""
+        core = self._get_json("/rate_limit").json()["resources"]["core"]
+        return int(core["remaining"]), int(core["limit"])
+
     def fetch_pull_request(
         self,
         repository: str,
@@ -143,6 +195,8 @@ class GitHubClient:
         max_files: int = 100,
         with_source: bool = True,
         max_source_files: int = 10,
+        with_analysis: bool = True,
+        with_rules: bool = True,
     ) -> PullRequestSnapshot:
         pr = self._get_json(f"/repos/{repository}/pulls/{number}").json()
         head_sha, base_sha = pr["head"]["sha"], pr["base"]["sha"]
@@ -169,16 +223,57 @@ class GitHubClient:
             raise GitHubError("The pull request has no textual diff to review (no patches available).")
 
         supporting: list[SupportingFile] = []
+        fulltext: dict[str, str] = {}  # every file we downloaded, so nothing is fetched twice
         if with_source:
             candidates = [f for f in files if f["status"] != "removed" and _is_source(f["filename"])]
             for f in candidates[:max_source_files]:
-                content, note = self._fetch_source(repository, f["filename"], head_sha)
-                if content is not None:
-                    supporting.append(SupportingFile(path=f["filename"], content=content))
-                if note:
-                    notes.append(note)
+                path = f["filename"]
+                try:
+                    text = self._fetch_text(repository, path, head_sha)
+                except GitHubError as exc:
+                    notes.append(f"Source of {path} at {head_sha[:7]} could not be fetched ({exc}).")
+                    continue
+                fulltext[path] = text
+                if len(text) <= MAX_SOURCE_CHARS:
+                    supporting.append(SupportingFile(path=path, content=text))
+                else:
+                    notes.append(f"Source of {path} is {len(text)} characters (limit {MAX_SOURCE_CHARS}); only its diff is visible.")
             if len(candidates) > max_source_files:
                 notes.append(f"Full source of {len(candidates) - max_source_files} changed file(s) not fetched (limit {max_source_files}); only their diffs are visible.")
+
+        # Full changed Python files for the static-analysis tools. The model does not see these.
+        analysis: list[SupportingFile] = []
+        if with_analysis:
+            python_files = [f["filename"] for f in files if f["status"] != "removed" and f["filename"].endswith(".py")]
+            for path in python_files[:MAX_ANALYSIS_FILES]:
+                text = fulltext.get(path)
+                if text is None:
+                    try:
+                        text = self._fetch_text(repository, path, head_sha)
+                    except GitHubError as exc:
+                        info.append(f"{path} could not be fetched for static analysis ({exc}).")
+                        continue
+                if len(text) <= MAX_ANALYSIS_CHARS:
+                    analysis.append(SupportingFile(path=path, content=text))
+                else:
+                    info.append(f"{path} is {len(text)} characters: too large for static analysis (limit {MAX_ANALYSIS_CHARS}).")
+
+        # Team rules come from the BASE commit: a pull request must not be able to rewrite its own rules.
+        rules, rules_source = None, None
+        if with_rules:
+            for rules_path in RULES_PATHS:
+                try:
+                    rules = self._fetch_text(repository, rules_path, base_sha)
+                except GitHubError as exc:
+                    if exc.status != 404:  # a missing rules file is normal; anything else is worth saying
+                        info.append(f"Team rules ({rules_path}) could not be read ({exc}).")
+                    continue
+                if len(rules) > MAX_RULES_CHARS:
+                    info.append(f"{rules_path} is {len(rules)} characters (limit {MAX_RULES_CHARS}); the rules were not used.")
+                    rules = None
+                    continue
+                rules_source = f"{rules_path} at base commit {base_sha[:7]}"
+                break
 
         # The PR may have received a push while we were reading. Never mix two revisions.
         again = self._get_json(f"/repos/{repository}/pulls/{number}").json()
@@ -198,20 +293,18 @@ class GitHubClient:
             supporting_files=supporting,
             notes=notes,
             info=info,
+            analysis_files=analysis,
+            rules=rules,
+            rules_source=rules_source,
         )
 
-    def _fetch_source(self, repository: str, path: str, sha: str) -> tuple[str | None, str | None]:
+    def _fetch_text(self, repository: str, path: str, sha: str) -> str:
+        """Raw text of one file at one commit. Raises GitHubError (with .status) when it cannot be read."""
+        response = self._get(f"/repos/{repository}/contents/{path}", {"ref": sha}, raw=True)
         try:
-            response = self._get(f"/repos/{repository}/contents/{path}", {"ref": sha}, raw=True)
-        except GitHubError as exc:
-            return None, f"Source of {path} at {sha[:7]} could not be fetched ({exc})."
-        try:
-            text = response.content.decode("utf-8")
-        except UnicodeDecodeError:
-            return None, f"Source of {path} is not UTF-8 text; skipped."
-        if len(text) > MAX_SOURCE_CHARS:
-            return None, f"Source of {path} is {len(text)} characters (limit {MAX_SOURCE_CHARS}); only its diff is visible."
-        return text, None
+            return response.content.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise GitHubError(f"{path} is not UTF-8 text") from exc
 
 
 def _is_source(path: str) -> bool:

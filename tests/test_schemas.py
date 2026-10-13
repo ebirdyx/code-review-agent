@@ -106,9 +106,8 @@ def test_all_shipped_examples_validate():
 def test_missing_expected_file_is_reported(tmp_path):
     (tmp_path / "examples").mkdir()
     (tmp_path / "expected").mkdir()
+    import shutil
+
     src = ROOT / "examples" / "free-shipping-fixed"
-    dst = tmp_path / "examples" / "free-shipping-fixed"
-    dst.mkdir()
-    for f in src.iterdir():
-        (dst / f.name).write_bytes(f.read_bytes())
+    shutil.copytree(src, tmp_path / "examples" / "free-shipping-fixed")  # the whole folder, sub-folders included
     assert check_examples(tmp_path / "examples", tmp_path / "expected") == 1

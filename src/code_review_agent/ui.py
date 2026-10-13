@@ -128,6 +128,7 @@ class UIApp:
             "head_sha": (revision or {}).get("head_sha", "")[:7] if revision else "",
             "duration_s": run.get("duration_s"),
             "pipeline": run.get("pipeline") or (result or {}).get("pipeline") or "single",
+            "ticket": ((result or {}).get("run") or {}).get("ticket"),
             "dismissed": len(result.get("dismissed", [])) if result else None,
             "triaged": (folder / "triage.json").exists(),
         }

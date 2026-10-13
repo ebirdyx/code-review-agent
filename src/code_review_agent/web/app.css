@@ -48,6 +48,7 @@ pre { background: #f4f6f8; border: 1px solid var(--line); border-radius: 6px; pa
 table { border-collapse: collapse; width: 100%; } td, th { padding: 4px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
 td.st { width: 60px; font-weight: 600; } .st.done { color: var(--ok); } .st.error { color: var(--bad); } .st.warn { color: var(--warn); } .st.start { color: var(--accent); }
 .md h1, .md h2, .md h3 { margin: 16px 0 6px; } .md h1 { font-size: 20px; } .md h2 { font-size: 16px; } .md h3 { font-size: 15px; }
+.md table { margin: 8px 0 14px; font-size: 13px; } .md th { background: #f1f4f9; font-weight: 600; }
 .md blockquote { margin: 6px 0; padding: 4px 12px; border-left: 3px solid var(--line); color: #3d4655; }
 .md ul { padding-left: 20px; } .md code { background: #f1f4f9; padding: 0 4px; border-radius: 4px; }
 .steps { padding-left: 20px; } .steps li { margin-bottom: 6px; }

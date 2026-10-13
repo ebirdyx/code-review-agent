@@ -654,6 +654,13 @@ def build_case(case: dict) -> None:
         target = folder / "supporting" / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
+    # The full new version of each changed Python file, for the static-analysis tools only
+    # (it is NOT part of the model's prompt, so the benchmark's model input is unchanged).
+    for path, (_, after) in case["files"].items():
+        if path.endswith(".py"):
+            target = folder / "analysis" / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(after, encoding="utf-8", newline="\n")
 
     expected = []
     for item in case["expected"]:

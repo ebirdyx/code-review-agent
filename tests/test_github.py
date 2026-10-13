@@ -39,9 +39,10 @@ def file_json(name="app.py", status="modified", patch=PATCH, **extra):
 class FakeGitHub:
     """Routes by path. `calls` records every request for assertions."""
 
-    def __init__(self, files=None, contents=None, pr_sequence=None, status=None):
+    def __init__(self, files=None, contents=None, pr_sequence=None, status=None, rules=None):
         self.files = files if files is not None else [file_json()]
         self.contents = contents or {"app.py": "def f():\n    x = 2\n    return x\n"}
+        self.rules = rules or {}  # team rules by path, served at the BASE commit only
         self.pr_sequence = list(pr_sequence or [pr_json(changed=len(self.files))])
         self.status = status  # force one HTTP error for every request
         self.calls: list[httpx.Request] = []
@@ -66,6 +67,11 @@ class FakeGitHub:
         if "/contents/" in path:
             name = path.split("/contents/", 1)[1]
             assert request.headers["Accept"] == "application/vnd.github.raw+json"
+            if name in (".review-agent/rules.md", "review-rules.md"):
+                assert request.url.params["ref"] == BASE  # rules come from the base commit, never from the PR
+                if name in self.rules:
+                    return httpx.Response(200, content=self.rules[name].encode())
+                return httpx.Response(404, json={"message": "Not Found"})
             assert request.url.params["ref"] == HEAD  # source is pinned to the reviewed commit
             if name in self.contents:
                 value = self.contents[name]
@@ -76,6 +82,22 @@ class FakeGitHub:
 
 def client(fake, token=None):
     return GitHubClient(token=token, transport=httpx.MockTransport(fake))
+
+
+# ------------------------------------------------------------------ rate limit
+
+
+def test_rate_limit_reports_what_is_left_and_proves_the_connection():
+    def handler(request):
+        assert request.url.path == "/rate_limit"
+        return httpx.Response(200, json={"resources": {"core": {"remaining": 42, "limit": 5000}}})
+
+    assert GitHubClient(token="t", transport=httpx.MockTransport(handler)).rate_limit() == (42, 5000)
+
+
+def test_rate_limit_with_a_bad_token_is_an_actionable_error():
+    with pytest.raises(GitHubError, match="refused the token"):
+        GitHubClient(token="bad", transport=httpx.MockTransport(lambda r: httpx.Response(401))).rate_limit()
 
 
 # ------------------------------------------------------------- reference parsing

@@ -134,6 +134,62 @@ def test_failed_model_call_stays_failed_with_its_original_error():
     assert result.status == "failed" and result.error.kind == FailureKind.TIMEOUT
 
 
+# ------------------------------------------------- one bad item must not cost the good ones
+
+
+def test_real_model_output_with_one_malformed_finding_keeps_the_valid_one():
+    # REAL gpt-oss:120b output: finding 0 is the correct boundary bug, finding 1 cites the invalid
+    # evidence source "team_rules". The whole answer used to be thrown away.
+    from code_review_agent.schemas import ModelReview
+    from code_review_agent.validation import DROPPED, parse_json_output
+
+    review, warnings = parse_json_output(raw("real-gpt-oss-defects-one-bad-source.json"), ModelReview)
+    assert [f.line for f in review.findings] == [11]  # the correct finding survived
+    assert review.findings[0].category == "boundary_condition"
+    assert len(warnings) == 1 and warnings[0].message.startswith(DROPPED)
+    assert "findings[1]" in warnings[0].message and "Docstring does not describe return value" in warnings[0].message
+    assert "evidence.1.source" in warnings[0].message
+
+
+def test_when_every_item_is_malformed_the_answer_still_fails():
+    with pytest.raises(InvalidOutput, match="category"):
+        parse_model_output('{"findings": [{"category": "style"}, {"category": "taste"}]}')
+
+
+def test_a_problem_outside_the_items_is_not_papered_over():
+    with pytest.raises(InvalidOutput, match="verdict"):
+        parse_model_output(j({"findings": [], "verdict": "approve"}))
+    good = json.dumps(make_valid_finding())
+    with pytest.raises(InvalidOutput):  # one good item, but the object itself has a stray field
+        parse_model_output('{"findings": [' + good + '], "verdict": "approve"}')
+
+
+def make_valid_finding():
+    return {"category": "boundary_condition", "severity": "medium", "file": "shop/shipping.py", "line": 6, "title": "t",
+            "explanation": "e", "evidence": [{"source": "code", "quote": "if total > 100:"}]}
+
+
+def j(obj) -> str:
+    return json.dumps(obj)
+
+
+def test_dropped_items_are_lost_coverage_in_the_single_pass_result_not_a_silent_empty():
+    text = j({"findings": [make_valid_finding(), {"category": "style"}], "limitations": []})
+    result = finalize(text)
+    assert result.status == "completed" and len(result.findings) == 1
+    assert result.coverage.complete is False
+    assert any(o.startswith("model output: Dropped findings[1]") for o in result.coverage.omitted)
+    assert not any(p.message.startswith("Dropped") for p in result.problems)  # reported once, as coverage
+    assert "Partial coverage" in render_markdown(result)
+
+
+def test_the_real_malformed_answer_through_the_whole_single_pass_pipeline():
+    result = finalize(raw("real-gpt-oss-defects-one-bad-source.json"))  # graded against the wrong case on purpose
+    assert result.status == "completed" and [f.line for f in result.findings] == [11]
+    assert any("Dropped" in o for o in result.coverage.omitted)
+    assert any(p.kind == ProblemKind.UNKNOWN_FILE for p in result.problems)  # wrong case: the file is not in its diff
+
+
 # ---------------------------------------------------------------- duplicates
 
 
@@ -301,6 +357,22 @@ def test_explanation_is_flattened_into_a_quote():
     assert "> line one # Heading - bullet" in text
 
 
+# ----------------------------------------------------- the ticket is named in the result
+
+
+def test_the_report_and_result_name_the_ticket_whose_requirements_were_used():
+    with_ticket = finalize(raw("real-gpt-oss-faulty.json"))
+    assert with_ticket.run.ticket == "SHOP-42: Free shipping for large orders"
+    assert "- **Ticket:** SHOP-42: Free shipping for large orders" in render_markdown(with_ticket)
+
+
+def test_without_a_ticket_the_report_says_no_requirements_were_available():
+    _, review_input = load_example(EXAMPLES / "free-shipping-faulty")
+    result = finalize_review(record(raw("real-gpt-oss-faulty.json")), None, review_input)
+    assert result.run.ticket is None
+    assert "- **Ticket:** none: no requirements were available" in render_markdown(result)
+
+
 # ----------------------------------------------------------------------- CLI
 
 
@@ -321,3 +393,27 @@ def test_cli_validate_returns_error_code_for_failed_review(tmp_path):
     code = main(["validate", str(EXAMPLES / "free-shipping-faulty"), str(RAW / "malformed.txt"),
                  "--runs", str(tmp_path)])
     assert code == 2
+
+
+# ------------------------------------------------- unquoted field names (seen from real Qwen output)
+
+
+def test_unquoted_field_names_are_quoted_and_flagged():
+    from code_review_agent.schemas import VerifyReview
+    from code_review_agent.validation import parse_json_output
+
+    review, warnings = parse_json_output(raw("real-qwen-verify-bare-key.txt"), VerifyReview)
+    assert review.verdicts[0].verdict == "supported" and review.verdicts[0].index == 1
+    assert any("without quotes" in w.message for w in warnings)
+
+
+def test_the_repair_never_touches_text_inside_strings_and_other_breakage_stays_invalid():
+    from code_review_agent.schemas import VerifyReview
+    from code_review_agent.validation import InvalidOutput, parse_json_output
+
+    note = "a note,\nverdict: not a key"  # json.dumps escapes the newline, so no line can start with a bare word
+    ok = '{\n  "verdicts": [],\n  "limitations": [' + json.dumps(note) + "]\n}"
+    review, warnings = parse_json_output(ok, VerifyReview)
+    assert review.limitations == [note] and not warnings
+    with pytest.raises(InvalidOutput, match="not valid JSON"):
+        parse_json_output('{\n  "verdicts": [\n    foo bar\n  ]\n}', VerifyReview)

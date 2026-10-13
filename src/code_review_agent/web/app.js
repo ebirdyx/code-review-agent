@@ -46,7 +46,9 @@ function renderMarkdown(text) {
   const root = el("div", { class: "md" });
   const lines = text.split("\n");
   let i = 0;
-  const isBlock = (l) => /^(#{1,6} |> ?|[-*] |`{3,})/.test(l);
+  const isBlock = (l) => /^(#{1,6} |> ?|[-*] |`{3,}|\|)/.test(l);
+  const isRow = (l) => /^\|.*\|\s*$/.test(l);
+  const cellsOf = (l) => l.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
   while (i < lines.length) {
     const line = lines[i];
     if (/^`{3,}/.test(line)) {
@@ -59,6 +61,14 @@ function renderMarkdown(text) {
       const level = Math.min(line.match(/^#+/)[0].length, 3);
       root.append(el("h" + level, {}, inline(line.replace(/^#+ /, ""))));
       i++;
+    } else if (isRow(line) && i + 1 < lines.length && /^\|[\s:|-]+\|\s*$/.test(lines[i + 1])) {
+      // A Markdown table: header row, separator row, then body rows. Cells are text nodes only.
+      const head = cellsOf(line);
+      const rows = [];
+      for (i += 2; i < lines.length && isRow(lines[i]); i++) rows.push(cellsOf(lines[i]));
+      root.append(el("table", {},
+        el("thead", {}, el("tr", {}, head.map((h) => el("th", {}, inline(h))))),
+        el("tbody", {}, rows.map((r) => el("tr", {}, r.map((c) => el("td", {}, inline(c))))))));
     } else if (/^> ?/.test(line)) {
       const body = [];
       for (; i < lines.length && /^> ?/.test(lines[i]); i++) body.push(lines[i].replace(/^> ?/, ""));
@@ -90,6 +100,7 @@ function eventTable(events) {
     const d = e.data || {};
     if (d.prompt_tokens != null) bits.push(`${d.prompt_tokens} in / ${d.completion_tokens} out tokens`);
     if (d.findings != null) bits.push(`${d.findings} finding(s)`);
+    if (d.warnings != null) bits.push(`${d.warnings} tool warning(s), ${d.on_changed_lines} on changed lines`);
     if (d.problems) bits.push(`${d.problems} unconfirmed`);
     return el("tr", {},
       el("td", { text: e.ts.slice(11, 19) }),
@@ -105,7 +116,8 @@ function findingCard(finding, index, triage) {
   const where = finding.line ? `${finding.file}:${finding.line}` : `${finding.file} (no line)`;
   const badges = [];
   if ((finding.found_by || []).length) badges.push(el("span", { class: "chip", text: "found by " + finding.found_by.join(" + ") }));
-  if (finding.verification === "supported") badges.push(el("span", { class: "chip ok", text: "verified" }));
+  if (finding.source === "tool") badges.push(el("span", { class: "chip ok", text: "static analysis" }));
+  else if (finding.verification === "supported") badges.push(el("span", { class: "chip ok", text: "verified" }));
   else if (finding.verification === "uncertain") badges.push(el("span", { class: "chip warn", text: "verifier unsure" }));
   else if (finding.verification_note) badges.push(el("span", { class: "chip warn", text: "not verified" }));
   const card = el("div", { class: "card" },
@@ -164,6 +176,29 @@ function passesView(result) {
     el("table", {}, el("thead", {}, el("tr", {}, ["Pass", "Status", "Time", "Tokens in / out", "Result"].map((h) => el("th", { text: h })))), el("tbody", {}, rows)));
 }
 
+function profileView(result) {
+  const p = result.change_profile;
+  if (!p || !p.files_changed) return null;
+  const langs = Object.entries(p.languages || {}).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, v]) => `${k} x${v}`).join(", ");
+  return el("div", {}, el("h2", { text: "Change profile" }),
+    el("div", { class: "summary" },
+      el("span", { class: "chip", text: `${p.files_changed} file(s)` }), el("span", { class: "chip", text: `+${p.lines_added} / -${p.lines_removed} lines` }),
+      el("span", { class: "chip", text: `${p.source_files} source · ${p.test_files} test` }), el("span", { class: "chip", text: langs })),
+    (p.hints || []).map((h) => el("div", { class: "banner warn", text: h })));
+}
+
+function toolsView(result) {
+  if (!(result.tools || []).length) return null;
+  const rows = result.tools.map((t) => el("tr", {},
+    el("td", { text: `${t.name} ${t.version || ""}` }),
+    el("td", { class: "st " + (t.status === "ok" ? "done" : t.status === "failed" ? "error" : "warn"), text: t.status }),
+    el("td", { text: String(t.files_checked) }), el("td", { text: String(t.total_findings) }),
+    el("td", { text: String(t.findings_on_changed_lines) }), el("td", { text: t.message || "" })));
+  return el("div", {}, el("h2", { text: "Automated checks (static analysis)" }),
+    el("p", { class: "muted", text: "Deterministic tools, not a model. Warnings on lines this PR changed are reported as findings; others are counted, not blamed on this change." }),
+    el("table", {}, el("thead", {}, el("tr", {}, ["Tool", "Status", "Files", "Warnings", "On changed lines", "Note"].map((h) => el("th", { text: h })))), el("tbody", {}, rows)));
+}
+
 function dismissedView(result) {
   if (!(result.dismissed || []).length) return null;
   return el("div", {}, el("h2", { text: "Dismissed by verification" }),
@@ -178,7 +213,7 @@ function findingsView(detail) {
   const result = detail.result;
   if (!result) return el("p", { class: "hint", text: "No result yet." });
   if (result.status === "failed") return el("div", { class: "banner bad", text: `Review failed (${result.error.kind}): ${result.error.message}` });
-  const extras = [passesView(result), checklistView(result)];
+  const extras = [profileView(result), toolsView(result), passesView(result), checklistView(result)];
   if (!result.findings.length) return el("div", {}, ...extras.filter(Boolean),
     el("p", { text: "No findings were reported. That is the model's claim, not a guarantee." }), dismissedView(result));
   const triage = {};
@@ -255,7 +290,8 @@ function renderDetail() {
   else if (state.tab === "findings") body = findingsView(d);
   else if (state.tab === "timeline") body = eventTable(d.events);
   else body = rawView(d);
-  const chips = [s.model, s.pipeline && s.pipeline + "-pass", "prompt " + s.prompt_version, s.head_sha && "commit " + s.head_sha,
+  const ticketChip = s.findings == null ? null : (s.ticket ? "ticket " + s.ticket : "no ticket");
+  const chips = [s.model, s.pipeline && s.pipeline + "-pass", "prompt " + s.prompt_version, s.head_sha && "commit " + s.head_sha, ticketChip,
     s.problems != null && `${s.problems} unconfirmed`, s.dismissed ? `${s.dismissed} dismissed by verifier` : null].filter(Boolean);
   $view().replaceChildren(...[
     el("h2", { text: s.case_id }),
@@ -322,7 +358,9 @@ async function init() {
   document.getElementById("new-review").addEventListener("submit", startReview);
   try {
     state.config = await api("/api/config");
-    document.getElementById("cfg").textContent = state.config.model ? `model: ${state.config.model} · prompt: ${state.config.prompt_version}` : "";
+    const c = state.config;
+    document.getElementById("cfg").textContent = c.model
+      ? `new reviews will use: ${c.model} · ${c.pipeline || "multi"}-pass · prompt ${c.prompt_version}` : "";
     if (!state.config.can_start) document.getElementById("start").disabled = true;
   } catch (e) { /* ignore */ }
   showEmpty();

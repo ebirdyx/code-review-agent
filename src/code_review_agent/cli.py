@@ -27,10 +27,12 @@ from .evaluation import (
     render_scoreboard,
     score_run,
 )
+from .comment import MARKER, render_pr_comment
 from .events import EventLog, echo_to_stderr
 from .github import GitHubClient, GitHubError
 from .jira import FIELD_ENV, JiraClient, JiraError
 from .loading import load_example, load_expected
+from .evidence import DEFAULT_TOOLS, RUFF_SELECT
 from .pipeline import DEFAULT_PASSES, MULTI_PROMPT_VERSION, multi_context_text
 from .service import PRFetchOptions, fetch_snapshot, finish_run, review_folder
 from .ui import UIApp, make_server
@@ -137,6 +139,10 @@ def _add_model_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--passes", help=f"multi only: comma-separated subset of {','.join(DEFAULT_PASSES)}")
     parser.add_argument("--no-verify", action="store_true", help="multi only: skip the verification pass")
     parser.add_argument("--verifier-profile", help="multi only: use another model profile for verification")
+    parser.add_argument("--tools", help=f"multi only: static-analysis tools to run, comma-separated (default {','.join(DEFAULT_TOOLS)})")
+    parser.add_argument("--no-tools", action="store_true", help="multi only: do not run static analysis")
+    parser.add_argument("--ruff-select", default=RUFF_SELECT, help=f"Ruff rule families to run (default {RUFF_SELECT})")
+    parser.add_argument("--rules", type=Path, help="team coding rules file (default: .review-agent/rules.md from the PR's base branch)")
 
 
 def _pipeline_kwargs(args: argparse.Namespace) -> dict:
@@ -153,6 +159,9 @@ def _pipeline_kwargs(args: argparse.Namespace) -> dict:
         "passes": [p.strip() for p in args.passes.split(",") if p.strip()] if args.passes else None,
         "verify": not args.no_verify,
         "verifier_client": verifier,
+        "tools": () if args.no_tools else (tuple(t.strip() for t in args.tools.split(",") if t.strip()) if args.tools else DEFAULT_TOOLS),
+        "ruff_select": args.ruff_select,
+        "rules_file": args.rules,
     }
 
 
@@ -207,14 +216,14 @@ def _finish(record, sent, ticket, review_input, runs_dir: Path) -> int:
     return 0 if result.status == "completed" else 2
 
 
-def review_command(args: argparse.Namespace, events: EventLog | None = None) -> int:
-    """Send one example to the model, validate the answer and write a report."""
+def _review(args: argparse.Namespace, events: EventLog | None = None) -> tuple[int, Path | None, ReviewResult | None]:
+    """Run one review. Returns (exit code, run folder, result); folder and result are None if it never started."""
     events = events or EventLog(echo=echo_to_stderr)
     try:
         client = _make_client(args)
     except ModelError as exc:
         print(f"[{exc.kind}] {exc.message}", file=sys.stderr)
-        return 1
+        return 1, None, None
 
     s = client.settings
     print(f"Reviewing {args.example.name} with {s.model} at {s.host} ...")
@@ -225,14 +234,39 @@ def review_command(args: argparse.Namespace, events: EventLog | None = None) -> 
         )
     except (OSError, ValidationError, ValueError) as exc:
         print(f"Cannot start review: {exc}", file=sys.stderr)
-        return 1
+        return 1, None, None
     except ModelError as exc:
         print(f"[{exc.kind}] {exc.message}", file=sys.stderr)
-        return 1
+        return 1, None, None
     print(report)
     answers = "passes/*.raw.txt" if result.pipeline == "multi" else "raw_response.txt"
     print(f"Saved in {folder}: run.json, context.txt, {answers}, result.json, report.md, events.jsonl")
-    return 0 if result.status == "completed" else 2
+    return (0 if result.status == "completed" else 2), folder, result
+
+
+def review_command(args: argparse.Namespace, events: EventLog | None = None) -> int:
+    """Send one example to the model, validate the answer and write a report."""
+    return _review(args, events)[0]
+
+
+def _publish_comment(args: argparse.Namespace, folder: Path, result: ReviewResult) -> bool:
+    """Write comment.md next to the report and, only with --post-comment, publish it on the pull request."""
+    body = render_pr_comment(result, report_hint=args.report_link)
+    (folder / "comment.md").write_text(body, encoding="utf-8")
+    rev = result.run.revision if result.run else None
+    if not args.post_comment:
+        print(f"Pull-request comment written to {folder / 'comment.md'} (not posted: add --post-comment to publish it).")
+        return True
+    if not rev or not rev.repository or not rev.pr_number:
+        print("Cannot post: the review does not identify a pull request.", file=sys.stderr)
+        return False
+    try:
+        action, url = GitHubClient().upsert_comment(rev.repository, rev.pr_number, body, MARKER)
+    except GitHubError as exc:
+        print(f"Cannot post the comment: {exc}", file=sys.stderr)
+        return False
+    print(f"Comment {action} on {rev.repository}#{rev.pr_number}: {url}")
+    return True
 
 
 def _add_pr_args(parser: argparse.ArgumentParser) -> None:
@@ -253,6 +287,7 @@ def _fetch_snapshot(args: argparse.Namespace, events: EventLog | None = None) ->
         options = PRFetchOptions.from_cli(
             jira=args.jira, jira_projects=args.jira_projects, ticket_keys=args.ticket_key,
             ticket_file=args.ticket, max_files=args.max_files, no_source=args.no_source,
+            no_tools=getattr(args, "no_tools", False),
         )
         # The lambdas look the classes up when called, so tests can substitute them on this module.
         folder, snapshot = fetch_snapshot(
@@ -272,6 +307,50 @@ def _fetch_snapshot(args: argparse.Namespace, events: EventLog | None = None) ->
     for note in snapshot.notes:
         print(f"  not retrieved: {note}")
     return folder
+
+
+def doctor_command(args: argparse.Namespace) -> int:
+    """Check every connection in one go: model key, Jira login, GitHub access, tools. Never prints a secret."""
+    failures = 0
+
+    def line(ok: bool | None, name: str, text: str) -> None:
+        nonlocal failures
+        mark = {True: "OK     ", False: "FAILED ", None: "n/a    "}[ok]
+        failures += ok is False
+        print(f"{mark}{name:<13} {text}")
+
+    try:
+        s = _settings(args)
+        key_env = s.key_env or ("OLLAMA_API_KEY" if "ollama.com" in s.host else None)
+        needs_key = key_env is not None
+        have = bool(os.environ.get(key_env)) if needs_key else True
+        line(have, "Model", f"profile '{s.profile}': {s.model} ({s.provider}) at {s.host}"
+             + (f"; key {key_env} is {'set' if have else 'NOT set'}" if needs_key else "; no key needed"))
+    except ModelError as exc:
+        line(False, "Model", exc.message)
+
+    try:
+        jira = JiraClient()
+    except JiraError as exc:
+        line(None, "Jira", f"not configured (optional): {exc}")
+    else:
+        try:
+            line(True, "Jira", f"logged in as '{jira.whoami()}' at {jira._host}")
+        except JiraError as exc:
+            line(False, "Jira", str(exc))
+
+    try:
+        gh = GitHubClient()
+        remaining, limit = gh.rate_limit()
+        line(True, "GitHub", f"reachable, {'token set' if gh.authenticated else 'no token (public repositories only)'}; "
+             f"{remaining}/{limit} requests left this hour")
+    except GitHubError as exc:
+        line(False, "GitHub", str(exc))
+
+    versions = {t: __import__("importlib.metadata", fromlist=["version"]).version(t) for t in DEFAULT_TOOLS}
+    line(True, "Static tools", ", ".join(f"{t} {v}" for t, v in versions.items()))
+    print("\nAll connections OK." if not failures else f"\n{failures} problem(s): fix the lines marked FAILED.")
+    return 1 if failures else 0
 
 
 def fetch_ticket_command(args: argparse.Namespace) -> int:
@@ -307,7 +386,11 @@ def review_pr_command(args: argparse.Namespace) -> int:
     if folder is None:
         return 1
     args.example = folder
-    return review_command(args, events)
+    code, run_folder, result = _review(args, events)
+    if result is not None and run_folder is not None and not _publish_comment(args, run_folder, result):
+        return 1
+    # A failed review is still published (it says "did not run"), so a silent pipeline is never mistaken for a clean one.
+    return code
 
 
 def validate_command(args: argparse.Namespace) -> int:
@@ -554,6 +637,13 @@ def main(argv: list[str] | None = None) -> int:
     _add_pr_args(rpr)
     _add_model_args(rpr)
     rpr.add_argument("--runs", type=Path, default=Path("runs"), help="where to save run folders")
+    rpr.add_argument("--post-comment", action="store_true",
+                     help="publish the review as ONE comment on the pull request (updated on every run). "
+                          "Needs GITHUB_TOKEN with write access to pull requests. Without this flag, comment.md is only written")
+    rpr.add_argument("--report-link", help="address to mention in the comment as the place of the full report (e.g. the workflow run)")
+
+    doc = sub.add_parser("doctor", help="check the model key, Jira login, GitHub access and tools in one go")
+    _add_model_args(doc)
 
     prof = sub.add_parser("profiles", help="list model profiles (provider, model, licence, key set or not)")
     prof.add_argument("--profile", help="highlight this profile")
@@ -602,6 +692,8 @@ def main(argv: list[str] | None = None) -> int:
         return check_examples(args.examples, args.expected)
     if args.command == "build-context":
         return build_context_command(args.example, args.out, args.max_chars)
+    if args.command == "doctor":
+        return doctor_command(args)
     if args.command == "profiles":
         return profiles_command(args)
     if args.command == "ui":

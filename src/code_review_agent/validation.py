@@ -17,13 +17,16 @@ from __future__ import annotations
 
 import json
 import re
+from typing import get_args, get_origin
 
 from pydantic import BaseModel, ValidationError
 
 from .context import HUNK_HEADER, render_ticket, split_diff
+from .evidence import compute_profile
 from .review import RunRecord
 from .schemas import (
     WHOLE_CHANGE,
+    Coverage,
     FailureKind,
     Finding,
     ModelReview,
@@ -44,6 +47,7 @@ class InvalidOutput(Exception):
 # ------------------------------------------------------------------ 1 + 2: parsing
 
 _FENCE = re.compile(r"^```[a-zA-Z]*\s*\n(.*?)\n?```\s*$", re.DOTALL)
+_BARE_KEY = re.compile(r"(?m)^(\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*:)")
 
 
 def parse_model_output(raw: str, done_reason: str | None = None) -> tuple[ModelReview, list[ValidationProblem]]:
@@ -74,20 +78,87 @@ def parse_json_output(raw: str, model: type[BaseModel], done_reason: str | None 
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise InvalidOutput(
-            f"The response is not valid JSON ({exc.msg} at line {exc.lineno}, column {exc.colno})."
-            + _length_hint(done_reason)
-        ) from exc
+        # Some models write `verdict: "x"` instead of `"verdict": "x"`. Quoting a key that starts a line is
+        # safe (a JSON string cannot contain a raw newline) and changes no value; anything else stays invalid.
+        repaired = _BARE_KEY.sub(r'\1"\2"\3', text)
+        try:
+            data = json.loads(repaired)
+        except json.JSONDecodeError:
+            raise InvalidOutput(
+                f"The response is not valid JSON ({exc.msg} at line {exc.lineno}, column {exc.colno})."
+                + _length_hint(done_reason)
+            ) from exc
+        warnings.append(
+            ValidationProblem(
+                kind=ProblemKind.FORMAT_WARNING,
+                message="The model wrote some field names without quotes; they were quoted.",
+            )
+        )
 
     try:
         return model.model_validate(data), warnings
     except ValidationError as exc:
+        original = exc
         details = "; ".join(
             f"{'.'.join(str(p) for p in err['loc']) or '(root)'}: {err['msg']}"
             for err in exc.errors()[:5]
         )
         more = f" (+{exc.error_count() - 5} more)" if exc.error_count() > 5 else ""
-        raise InvalidOutput(f"The JSON does not match the review schema: {details}{more}") from exc
+        failure = InvalidOutput(f"The JSON does not match the review schema: {details}{more}")
+
+    # One malformed finding should not cost the valid ones. Keep what validates, drop the rest VISIBLY.
+    salvaged = _salvage(data, model)
+    if salvaged is None:
+        raise failure from original
+    cleaned, dropped = salvaged
+    try:
+        obj = model.model_validate(cleaned)
+    except ValidationError as exc:
+        raise failure from exc
+    warnings += [ValidationProblem(kind=ProblemKind.FORMAT_WARNING, message=f"{DROPPED} {note}") for note in dropped]
+    return obj, warnings
+
+
+DROPPED = "Dropped"  # messages that start with this describe model output we discarded (it counts as lost coverage)
+
+
+def _item_model(field) -> type[BaseModel] | None:
+    """For a field typed list[SomeModel], SomeModel; otherwise None."""
+    args = get_args(field.annotation)
+    if get_origin(field.annotation) is list and len(args) == 1 and isinstance(args[0], type) and issubclass(args[0], BaseModel):
+        return args[0]
+    return None
+
+
+def _salvage(data, model: type[BaseModel]) -> tuple[dict, list[str]] | None:
+    """Validate list items one by one. Returns (data with only the valid items, notes on dropped ones),
+    or None when nothing can be saved (not an object, nothing was wrong with the items, or no item is valid)."""
+    if not isinstance(data, dict):
+        return None
+    cleaned = dict(data)
+    dropped: list[str] = []
+    kept_any = False
+    for name, field in model.model_fields.items():
+        item_model = _item_model(field)
+        items = data.get(name)
+        if item_model is None or not isinstance(items, list):
+            continue
+        valid = []
+        for i, item in enumerate(items):
+            try:
+                item_model.model_validate(item)
+            except ValidationError as exc:
+                err = exc.errors()[0]
+                label = (item.get("title") or item.get("number") or "") if isinstance(item, dict) else ""
+                where = ".".join(str(p) for p in err["loc"])
+                dropped.append(f"{name}[{i}]{' (' + str(label)[:60] + ')' if label else ''}: {where}: {err['msg']}")
+            else:
+                valid.append(item)
+        cleaned[name] = valid
+        kept_any = kept_any or bool(valid)
+    if not dropped or not kept_any:
+        return None  # either the problem is not in the items, or every item was malformed: that is a failure
+    return cleaned, dropped
 
 
 def _length_hint(done_reason: str | None) -> str:
@@ -172,7 +243,8 @@ class Grounder:
             if ticket else None
         )
         pr_text = _squash(f"{review_input.pr.title}\n{review_input.pr.description}")
-        self._haystacks = {"code": code, "ticket": ticket_text, "pr_description": pr_text}
+        rules_text = _squash(review_input.rules) if review_input.rules else None
+        self._haystacks = {"code": code, "ticket": ticket_text, "pr_description": pr_text, "rules": rules_text}
 
     def location(self, file: str | None, line: int | None) -> tuple[ProblemKind, str] | None:
         if file is None or file == WHOLE_CHANGE:
@@ -192,9 +264,12 @@ class Grounder:
     def quote(self, ev) -> tuple[ProblemKind, str] | None:
         haystack = self._haystacks[ev.source]
         if haystack is None:
+            if ev.source == "rules":
+                return ProblemKind.QUOTE_NOT_FOUND, f"Evidence cites the team rules, but no team rules were provided: \"{ev.quote}\""
             return ProblemKind.QUOTE_NOT_FOUND, f"Evidence cites the ticket, but no ticket was provided: \"{ev.quote}\""
         if _squash(ev.quote) not in haystack:
-            return ProblemKind.QUOTE_NOT_FOUND, f"Quoted {ev.source} text was not found in the input: \"{ev.quote}\""
+            where = "the team rules" if ev.source == "rules" else "the input"
+            return ProblemKind.QUOTE_NOT_FOUND, f"Quoted {ev.source} text was not found in {where}: \"{ev.quote}\""
         return None
 
 
@@ -243,8 +318,10 @@ def finalize_review(
         duration_s=record.duration_s,
         prompt_tokens=record.prompt_tokens,
         completion_tokens=record.completion_tokens,
+        ticket=f"{ticket.key}: {ticket.title}" if ticket else None,
     )
-    common = {"run": run, "coverage": record.coverage, "missing_inputs": record.missing_inputs}
+    common = {"run": run, "coverage": record.coverage, "missing_inputs": record.missing_inputs,
+              "change_profile": compute_profile(review_input)}
 
     if record.error is not None:  # the model call itself failed (Stage 3)
         return ReviewResult(status="failed", error=record.error, **common)
@@ -259,6 +336,12 @@ def finalize_review(
         )
 
     findings, removed = deduplicate(review.findings)
+    # Output the parser had to discard is lost coverage: say so, instead of letting it look like "nothing found".
+    lost = [p.message for p in problems if p.message.startswith(DROPPED)]
+    if lost:
+        common["coverage"] = Coverage(
+            complete=False, omitted=[*record.coverage.omitted, *[f"model output: {m}" for m in lost]])
+        problems = [p for p in problems if not p.message.startswith(DROPPED)]
     problems = problems + check_grounding(findings, ticket, review_input)
     return ReviewResult(
         status="completed",

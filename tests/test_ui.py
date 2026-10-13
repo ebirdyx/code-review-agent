@@ -137,6 +137,13 @@ def test_runs_list_shows_completed_running_failed_and_interrupted(ui):
     assert by_name[stale.name]["status"] == "interrupted"
 
 
+def test_run_summary_tells_which_ticket_was_used(ui):
+    app, client, _ = ui
+    make_completed_run(app)
+    run = client.json("/api/runs")[1][0]
+    assert run["ticket"] == "SHOP-42: Free shipping for large orders"
+
+
 def test_nested_evaluation_batches_are_listed_and_readable(ui):
     app, client, _ = ui
     batch = app.runs_dir / "eval-dev-20261012T000000"

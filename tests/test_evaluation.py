@@ -107,7 +107,9 @@ def test_expected_lines_point_at_the_anchor_text_in_the_diff(split):
 
 
 def test_case_folders_contain_only_model_inputs(split):
-    allowed = {"ticket.json", "pr.json", "change.diff", "supporting"}
+    # `analysis` holds full "after" files for the static-analysis tools only (never shown to the model);
+    # `rules.md` would be team rules. Expected answers must still never live here.
+    allowed = {"ticket.json", "pr.json", "change.diff", "supporting", "analysis", "rules.md"}
     for case_id in split.dev + split.heldout:
         assert {p.name for p in case_dir(case_id).iterdir()} <= allowed
 
