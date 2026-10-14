@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from code_review_agent.app.cli import check_examples
+from code_review_agent.app.cli.offline import check_examples
 from code_review_agent.connectors.snapshot import load_example, load_expected
 from code_review_agent.schemas import (
     FailureKind,

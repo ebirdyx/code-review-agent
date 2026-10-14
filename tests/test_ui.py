@@ -367,7 +367,7 @@ def test_printing_a_report_with_unusual_characters_never_crashes_the_command(tmp
     import sys
 
     code = (
-        "from code_review_agent.app.cli import _make_output_safe; _make_output_safe(); "
+        "from code_review_agent.app.cli.output import make_output_safe; make_output_safe(); "
         "print('free\u2011shipping caf\u00e9')"
     )
     done = subprocess.run([sys.executable, "-c", code], capture_output=True, env={**__import__('os').environ, "PYTHONIOENCODING": "cp1252"})

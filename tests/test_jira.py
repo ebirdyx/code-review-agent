@@ -13,7 +13,7 @@ import httpx
 import pytest
 from test_github import HEAD, FakeGitHub  # reuse the fake GitHub from the Stage 6 tests
 
-from code_review_agent.app import cli
+from code_review_agent.app import cli, clients
 from code_review_agent.connectors.jira import (
     JiraClient,
     JiraError,
@@ -328,9 +328,9 @@ def test_doctor_reports_each_connection_and_the_exit_code_follows(monkeypatch, c
     from code_review_agent.connectors.github import GitHubClient as RealGitHub
 
     monkeypatch.setenv("OLLAMA_API_KEY", "k")
-    monkeypatch.setattr(cli, "JiraClient", lambda: JiraClient("https://site.atlassian.net", "a@b.c", "t", transport=httpx.MockTransport(
+    monkeypatch.setattr(clients, "jira_client", lambda: JiraClient("https://site.atlassian.net", "a@b.c", "t", transport=httpx.MockTransport(
         lambda r: httpx.Response(200, json={"displayName": "Pamela B."}))))
-    monkeypatch.setattr(cli, "GitHubClient", lambda: RealGitHub(transport=httpx.MockTransport(
+    monkeypatch.setattr(clients, "github_client", lambda: RealGitHub(transport=httpx.MockTransport(
         lambda r: httpx.Response(200, json={"resources": {"core": {"remaining": 57, "limit": 60}}}))))
     assert cli.main(["doctor"]) == 0
     out = capsys.readouterr().out
@@ -344,7 +344,7 @@ def test_doctor_reports_each_connection_and_the_exit_code_follows(monkeypatch, c
 
 def test_doctor_flags_a_missing_key_a_bad_jira_login_and_unreachable_github(monkeypatch, capsys):
     monkeypatch.delenv("OLLAMA_API_KEY", raising=False)
-    monkeypatch.setattr(cli, "JiraClient", lambda: JiraClient("https://site.atlassian.net", "a@b.c", "secret-token",
+    monkeypatch.setattr(clients, "jira_client", lambda: JiraClient("https://site.atlassian.net", "a@b.c", "secret-token",
                                                               transport=httpx.MockTransport(lambda r: httpx.Response(401))))
 
     def github_down(request):
@@ -352,7 +352,7 @@ def test_doctor_flags_a_missing_key_a_bad_jira_login_and_unreachable_github(monk
 
     from code_review_agent.connectors.github import GitHubClient as RealGitHub
 
-    monkeypatch.setattr(cli, "GitHubClient", lambda: RealGitHub(transport=httpx.MockTransport(github_down)))
+    monkeypatch.setattr(clients, "github_client", lambda: RealGitHub(transport=httpx.MockTransport(github_down)))
     assert cli.main(["doctor"]) == 1
     out = capsys.readouterr().out
     assert "FAILED Model" in out and "NOT set" in out
@@ -367,7 +367,7 @@ def test_doctor_treats_missing_jira_settings_as_optional(monkeypatch, capsys):
     monkeypatch.setenv("OLLAMA_API_KEY", "k")
     for name in ("JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN"):
         monkeypatch.delenv(name, raising=False)
-    monkeypatch.setattr(cli, "GitHubClient", lambda: RealGitHub(transport=httpx.MockTransport(
+    monkeypatch.setattr(clients, "github_client", lambda: RealGitHub(transport=httpx.MockTransport(
         lambda r: httpx.Response(200, json={"resources": {"core": {"remaining": 1, "limit": 60}}}))))
     assert cli.main(["doctor"]) == 0  # not configured is not a failure
     assert "n/a    Jira" in capsys.readouterr().out
@@ -493,10 +493,10 @@ def cli_with_fakes(monkeypatch):
         monkeypatch.setenv("JIRA_EMAIL", "me@x.org")
         monkeypatch.setenv("JIRA_API_TOKEN", "tok-secret")
         if fake_jira is not None:
-            monkeypatch.setattr(cli, "JiraClient", lambda: JiraClient(transport=httpx.MockTransport(fake_jira)))
+            monkeypatch.setattr(clients, "jira_client", lambda: JiraClient(transport=httpx.MockTransport(fake_jira)))
         if fake_github is not None:
             from code_review_agent.connectors.github import GitHubClient
-            monkeypatch.setattr(cli, "GitHubClient", lambda: GitHubClient(transport=httpx.MockTransport(fake_github)))
+            monkeypatch.setattr(clients, "github_client", lambda: GitHubClient(transport=httpx.MockTransport(fake_github)))
     return install
 
 

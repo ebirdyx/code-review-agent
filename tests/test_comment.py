@@ -5,7 +5,8 @@ import json
 import httpx
 import pytest
 
-from code_review_agent.app import cli
+from code_review_agent.app import clients
+from code_review_agent.app.cli import review as review_commands
 from code_review_agent.connectors.github import GitHubClient, GitHubError
 from code_review_agent.reporting.comment import (
     MARKER,
@@ -189,30 +190,30 @@ class Args:
 
 
 def test_dry_run_writes_comment_md_and_never_calls_github(tmp_path, monkeypatch, capsys):
-    monkeypatch.setattr(cli, "GitHubClient", lambda: pytest.fail("must not contact GitHub in dry-run"))
-    assert cli._publish_comment(Args(False), tmp_path, result(findings=[finding()])) is True
+    monkeypatch.setattr(clients, "github_client", lambda: pytest.fail("must not contact GitHub in dry-run"))
+    assert review_commands.publish_comment(Args(False), tmp_path, result(findings=[finding()])) is True
     assert (tmp_path / "comment.md").read_text(encoding="utf-8").startswith(MARKER)
     assert "not posted" in capsys.readouterr().out
 
 
 def test_post_comment_publishes_and_reports_the_outcome(tmp_path, monkeypatch, capsys):
     fake = FakeGitHub()
-    monkeypatch.setattr(cli, "GitHubClient", lambda: client(fake))
-    assert cli._publish_comment(Args(True), tmp_path, result(findings=[finding()])) is True
+    monkeypatch.setattr(clients, "github_client", lambda: client(fake))
+    assert review_commands.publish_comment(Args(True), tmp_path, result(findings=[finding()])) is True
     assert "Comment created on o/r#3" in capsys.readouterr().out
     posted = fake.calls[-1][2]["body"]
     assert posted == (tmp_path / "comment.md").read_text(encoding="utf-8") and "example.test/run/1" in posted
 
 
 def test_post_comment_failure_returns_false_with_a_message(tmp_path, monkeypatch, capsys):
-    monkeypatch.setattr(cli, "GitHubClient", lambda: client(FakeGitHub(), token=""))
-    assert cli._publish_comment(Args(True), tmp_path, result()) is False
+    monkeypatch.setattr(clients, "github_client", lambda: client(FakeGitHub(), token=""))
+    assert review_commands.publish_comment(Args(True), tmp_path, result()) is False
     assert "Cannot post the comment" in capsys.readouterr().err
 
 
 def test_post_comment_needs_to_know_which_pull_request(tmp_path, capsys):
     local = result(run=RunSummary(case_id="c", created_at="t", prompt_version="p", model="m", host="h"))
-    assert cli._publish_comment(Args(True), tmp_path, local) is False
+    assert review_commands.publish_comment(Args(True), tmp_path, local) is False
     assert "does not identify a pull request" in capsys.readouterr().err
 
 

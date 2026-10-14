@@ -11,7 +11,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from code_review_agent.app import cli
+from code_review_agent.app import cli, clients
 from code_review_agent.connectors.github import (
     GitHubClient,
     GitHubError,
@@ -340,7 +340,7 @@ def test_local_examples_have_no_revision():
 
 def test_fetch_pr_cli_saves_a_reviewable_snapshot(tmp_path, monkeypatch, capsys):
     fake = FakeGitHub()
-    monkeypatch.setattr(cli, "GitHubClient", lambda: GitHubClient(transport=httpx.MockTransport(fake)))
+    monkeypatch.setattr(clients, "github_client", lambda: GitHubClient(transport=httpx.MockTransport(fake)))
     ticket_file = tmp_path / "t.json"
     ticket_file.write_text(json.dumps({"key": "SHOP-1", "title": "T", "acceptance_criteria": ["f returns 2"]}), encoding="utf-8")
     code = cli.main(["fetch-pr", "o/r#7", "--snapshots", str(tmp_path / "snaps"), "--ticket", str(ticket_file)])
@@ -354,7 +354,7 @@ def test_fetch_pr_cli_saves_a_reviewable_snapshot(tmp_path, monkeypatch, capsys)
 
 def test_fetch_pr_cli_reports_errors_without_traceback(tmp_path, monkeypatch, capsys):
     fake = FakeGitHub(status=(404, {}))
-    monkeypatch.setattr(cli, "GitHubClient", lambda: GitHubClient(transport=httpx.MockTransport(fake)))
+    monkeypatch.setattr(clients, "github_client", lambda: GitHubClient(transport=httpx.MockTransport(fake)))
     assert cli.main(["fetch-pr", "o/r#7", "--snapshots", str(tmp_path)]) == 1
     assert "Cannot fetch the pull request" in capsys.readouterr().err
     assert cli.main(["fetch-pr", "garbage", "--snapshots", str(tmp_path)]) == 1
@@ -364,7 +364,7 @@ def test_review_pr_cli_end_to_end_with_fake_github_and_fake_ollama(tmp_path, mon
     from test_model_client import FakeOllama
 
     fake = FakeGitHub()
-    monkeypatch.setattr(cli, "GitHubClient", lambda: GitHubClient(transport=httpx.MockTransport(fake)))
+    monkeypatch.setattr(clients, "github_client", lambda: GitHubClient(transport=httpx.MockTransport(fake)))
     server = FakeOllama(content='{"findings": [], "limitations": []}')
     try:
         code = cli.main(["review-pr", "o/r#7", "--snapshots", str(tmp_path / "s"), "--runs", str(tmp_path / "r"),
