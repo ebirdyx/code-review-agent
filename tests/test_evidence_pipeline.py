@@ -14,11 +14,9 @@ from code_review_agent.events import EventLog
 from code_review_agent.github import GitHubClient
 from code_review_agent.loading import load_example
 from code_review_agent.model_client import ModelError
-from code_review_agent.pipeline import (
-    load_pass_system,
-    multi_context_text,
-    run_multi,
-)
+from code_review_agent.assemble import multi_context_text
+from code_review_agent.passes import load_pass_system
+from code_review_agent.pipeline import run_multi
 from code_review_agent.report import render_markdown
 from code_review_agent.schemas import FailureKind, ModelReview, public_schema
 from code_review_agent.service import review_folder
@@ -116,9 +114,9 @@ def test_a_failed_tool_is_visible_and_the_model_passes_still_count(monkeypatch):
 
 def test_the_review_says_so_when_the_cap_left_tool_warnings_out(monkeypatch):
     monkeypatch.setattr(evidence, "MAX_REPORTED_FINDINGS", 2)
-    import code_review_agent.pipeline as pipeline
+    import code_review_agent.assemble as assemble  # the cap is applied where the candidates are prepared
 
-    monkeypatch.setattr(pipeline, "MAX_REPORTED_FINDINGS", 2)
+    monkeypatch.setattr(assemble, "MAX_REPORTED_FINDINGS", 2)
     blind = "".join(f"def f{i}():\n    try:\n        pass\n    except Exception:\n        pass\n\n" for i in range(4))
     _, review_input = load_example(CASES / "user-search-sql")
     review_input = review_input.model_copy(update={

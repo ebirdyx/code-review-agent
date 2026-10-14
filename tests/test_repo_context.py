@@ -19,7 +19,7 @@ from code_review_agent.github import (
     GitHubError,
 )
 from code_review_agent.loading import load_example, save_snapshot
-from code_review_agent.pipeline import context_summary, render_related, shared_blocks
+from code_review_agent.blocks import context_summary, render_related, shared_blocks
 from code_review_agent.report import render_markdown
 from code_review_agent.schemas import (
     Evidence,

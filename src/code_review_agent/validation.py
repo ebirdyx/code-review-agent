@@ -314,7 +314,7 @@ def finalize_review(
 ) -> ReviewResult:
     """Build the final ReviewResult from one run record."""
     if record.pipeline == "multi":
-        from .pipeline import assemble_multi  # imported here: pipeline builds on this module
+        from .assemble import assemble_multi  # imported here: assemble builds on this module
 
         return assemble_multi(record, ticket, review_input)
     run = RunSummary(

@@ -36,7 +36,8 @@ from .github import GitHubClient, GitHubError
 from .jira import FIELD_ENV, JiraClient, JiraError
 from .loading import load_example, load_expected
 from .evidence import DEFAULT_TOOLS, RUFF_SELECT
-from .pipeline import DEFAULT_PASSES, MULTI_PROMPT_VERSION, multi_context_text
+from .assemble import multi_context_text
+from .passes import DEFAULT_PASSES, MULTI_PROMPT_VERSION
 from .service import PRFetchOptions, fetch_snapshot, finish_run, review_folder
 from .ui import UIApp, make_server
 from .model_client import DEFAULT_HOST, ModelClient, ModelError, ModelSettings, make_client

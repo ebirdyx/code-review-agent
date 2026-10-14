@@ -57,7 +57,15 @@ ticket.json  pr.json  change.diff  supporting/        (ou une PR GitHub téléch
 | `context.py` | Construit le contexte. Les instructions (`prompts/review_vN.md`) sont séparées du contenu non fiable, encadré de marqueurs. Le diff reçoit des numéros de ligne. Ce qui manque ou ne tient pas dans le budget est **signalé**, jamais tronqué en silence. |
 | `model_client.py` | Deux clients derrière la même interface : Ollama et API compatible OpenAI (via LangChain). Adresse, modèle, délai, température, graine configurables. Erreurs classées (connexion, délai, clé, quota, crédit, modèle introuvable). |
 | `profiles.py`, `models.toml` | Profils de modèles nommés et documentés (aucun secret). |
-| `pipeline.py` | Pipeline multi-passes : exécution des spécialistes, fusion, vérification, assemblage pur du résultat. |
+| `pipeline.py` | Exécution du pipeline multi-passes : analyse statique, appels aux spécialistes (en parallèle), vérificateur. C'est le **seul** module du pipeline qui appelle le modèle. |
+| `passes.py` | Les passes qui existent, le schéma JSON de chacune, les prompts (`prompts/multi_vN/`) et la liste numérotée montrée au vérificateur. |
+| `blocks.py` | Ce que le modèle voit en plus du ticket et du diff : pistes d'analyse statique, règles d'équipe, code lié (blocs partagés), message du vérificateur. |
+| `merge.py` | Fusion des signalements d'un même problème en un seul constat (sans perdre ni preuve ni explication). |
+| `consistency.py` | Contrôle de cohérence : un critère « respecté » alors qu'un constat dit que le code cité est faux est signalé (jamais corrigé). |
+| `assemble.py` | Fonction **pure** : transforme une exécution enregistrée en `ReviewResult` (analyse des réponses, fusion, vérification, ancrage, cohérence) et reconstruit le texte exact envoyé (`context.txt`). Aucun appel au modèle. |
+| `codegraph.py` | Graphe de code léger (`ast`) : appelants, fonctions appelées, tests et classe des fonctions modifiées. |
+| `comparison.py` | Évaluation reproductible : configuration enregistrée par `eval-run`, comparaison côte à côte par `eval-compare`. |
+| `textutil.py` | Petit utilitaire de texte partagé. |
 | `evidence.py` | Analyse statique (Ruff, Bandit) en bac à sable, correspondance avec les lignes modifiées, profil du changement. |
 | `service.py`, `events.py` | Le flux de travail partagé par la ligne de commande et l'interface web, et les événements de progression. |
 | `ui.py`, `web/` | Interface web locale. |
@@ -79,7 +87,7 @@ Un petit modèle réussit mieux une tâche étroite que « tout relire ». Chaqu
 | `security` | Vulnérabilités concrètes introduites par le changement | Constats |
 | `verify` | Deuxième regard indépendant sur chaque constat candidat | *supported*, *uncertain* ou *unsupported* (écarté, mais **affiché** avec la raison) |
 
-La fusion regroupe les signalements d'un même problème (même fichier et même ligne, catégories compatibles) en gardant la catégorie la plus précise, la gravité la plus haute et toutes les preuves.
+La fusion regroupe les signalements d'un même problème (même fichier et même ligne ; si les catégories diffèrent, il faut en plus qu'ils citent le même code, emploient en grande partie les mêmes mots, ou que l'un vienne d'un outil d'analyse statique) en gardant la catégorie la plus précise, la gravité la plus haute et toutes les preuves ; deux remarques sans rapport qui tombent sur la même ligne restent séparées.
 Une passe qui échoue ou renvoie une réponse inutilisable est signalée (couverture partielle) sans bloquer les autres ; si **toutes** échouent, la revue est « échouée », jamais « aucun constat ».
 Les passes tournent en parallèle dans la limite du fournisseur (`max_concurrency` du profil ; 1 pour le palier gratuit d'Ollama Cloud).
 L'assemblage du résultat est une fonction **pure** des réponses enregistrées : `eval-revalidate` peut le refaire sans rappeler le modèle.

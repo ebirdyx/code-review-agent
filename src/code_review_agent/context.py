@@ -28,7 +28,7 @@ DEFAULT_MAX_CHARS = 30_000  # budget for untrusted content (roughly 8k tokens)
 FIELD_CAP = 4_000  # max chars for ticket / PR description text before it is cut
 
 HUNK_HEADER = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
-_NUM_WIDTH = 5
+NUM_WIDTH = 5
 
 
 class ReviewContext(StrictModel):
@@ -95,11 +95,11 @@ def annotate_diff(text: str) -> str:
         match = HUNK_HEADER.match(line)
         if match:
             new_no = int(match.group(1))
-            out.append(f"{'':>{_NUM_WIDTH}} | {line}")
+            out.append(f"{'':>{NUM_WIDTH}} | {line}")
         elif new_no is None or line.startswith(("-", "\\")):
-            out.append(f"{'':>{_NUM_WIDTH}} | {line}")  # header or removed line
+            out.append(f"{'':>{NUM_WIDTH}} | {line}")  # header or removed line
         else:  # '+' line, ' ' context line, or a context line whose space was stripped
-            out.append(f"{new_no:>{_NUM_WIDTH}} | {line}")
+            out.append(f"{new_no:>{NUM_WIDTH}} | {line}")
             new_no += 1
     return "\n".join(out)
 

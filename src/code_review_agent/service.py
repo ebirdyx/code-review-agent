@@ -18,7 +18,8 @@ from .github import GitHubClient, PullRequestSnapshot, parse_pr_reference
 from .jira import PROJECTS_ENV, JiraClient, resolve_ticket
 from .loading import load_example, save_snapshot
 from .model_client import ModelClient
-from .pipeline import MULTI_PROMPT_VERSION, run_multi
+from .passes import MULTI_PROMPT_VERSION
+from .pipeline import run_multi
 from .report import render_markdown
 from .review import RunRecord, new_run_folder, run_review, save_result, save_run
 from .schemas import ReviewInput, ReviewResult, Ticket

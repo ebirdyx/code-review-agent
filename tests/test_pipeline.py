@@ -17,15 +17,10 @@ from code_review_agent.cli import main
 from code_review_agent.events import EventLog
 from code_review_agent.loading import load_example
 from code_review_agent.model_client import ModelError, ModelResponse, ModelSettings
-from code_review_agent.pipeline import (
-    MULTI_PROMPT_VERSION,
-    assemble_multi,
-    load_pass_system,
-    merge_candidates,
-    multi_context_text,
-    render_candidates,
-    run_multi,
-)
+from code_review_agent.assemble import assemble_multi, multi_context_text
+from code_review_agent.merge import merge_candidates
+from code_review_agent.passes import MULTI_PROMPT_VERSION, load_pass_system, render_candidates
+from code_review_agent.pipeline import run_multi
 from code_review_agent.review import save_run
 from code_review_agent.schemas import (
     WHOLE_CHANGE,
@@ -473,7 +468,7 @@ def check(number=1, verdict="met", file=None, line=None, quote=None):
 
 
 def test_a_met_criterion_that_cites_code_a_finding_calls_wrong_is_flagged_not_changed():
-    from code_review_agent.pipeline import check_consistency
+    from code_review_agent.consistency import check_consistency
 
     criteria = [check(1, file="a.py", line=5)]
     problems = check_consistency(criteria, [mk("boundary_condition", "high", file="a.py", line=5, title="Off by one")])
@@ -483,7 +478,7 @@ def test_a_met_criterion_that_cites_code_a_finding_calls_wrong_is_flagged_not_ch
 
 def test_the_same_quoted_code_is_enough_even_without_a_location():
     """Seen with Qwen2.5-Coder: the criterion was marked met with no line, but quoted the line the finding blames."""
-    from code_review_agent.pipeline import check_consistency
+    from code_review_agent.consistency import check_consistency
 
     criteria = [check(1, quote="if total >   100:")]
     findings = [mk("boundary_condition", "high", line=6, quote="if total > 100:")]
@@ -491,7 +486,7 @@ def test_the_same_quoted_code_is_enough_even_without_a_location():
 
 
 def test_security_style_and_distant_findings_do_not_contradict_a_met_criterion():
-    from code_review_agent.pipeline import check_consistency
+    from code_review_agent.consistency import check_consistency
 
     criteria = [check(1, file="a.py", line=5, quote="x")]
     assert check_consistency(criteria, [mk("security", file="a.py", line=5, quote="x")]) == []
@@ -501,7 +496,7 @@ def test_security_style_and_distant_findings_do_not_contradict_a_met_criterion()
 
 
 def test_only_met_criteria_are_checked():
-    from code_review_agent.pipeline import check_consistency
+    from code_review_agent.consistency import check_consistency
 
     criteria = [check(1, verdict="not_met", file="a.py", line=5), check(2, verdict="cannot_determine", file="a.py", line=5)]
     assert check_consistency(criteria, [mk("logic_defect", file="a.py", line=5)]) == []

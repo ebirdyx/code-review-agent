@@ -78,7 +78,7 @@ def test_revalidate_uses_the_prompt_version_of_the_run(tmp_path):
 
 
 def test_v2_and_v3_stay_loadable_and_v2_is_unchanged():
-    from code_review_agent.pipeline import MULTI_PROMPT_VERSION, available_multi_versions, load_pass_system
+    from code_review_agent.passes import MULTI_PROMPT_VERSION, available_multi_versions, load_pass_system
 
     assert MULTI_PROMPT_VERSION == "multi_v4"  # the default is the newest set
     assert {"multi_v1", "multi_v2", "multi_v3", "multi_v4"} <= set(available_multi_versions())
@@ -89,7 +89,7 @@ def test_v2_and_v3_stay_loadable_and_v2_is_unchanged():
 
 
 def test_multi_v3_adds_the_three_guidance_texts_and_keeps_the_rest():
-    from code_review_agent.pipeline import load_pass_system
+    from code_review_agent.passes import load_pass_system
 
     standards = load_pass_system("multi_v3", "standards")
     assert "satisfies the rule in substance" in standards and "TEAM RULES" in standards and '"rules"' in standards
@@ -105,7 +105,7 @@ def test_multi_v3_adds_the_three_guidance_texts_and_keeps_the_rest():
 
 
 def test_multi_v4_describes_the_related_code_block_and_v3_does_not():
-    from code_review_agent.pipeline import load_pass_system
+    from code_review_agent.passes import load_pass_system
 
     for name in ("compliance", "defects", "security", "standards", "verify"):
         v4, v3 = load_pass_system("multi_v4", name), load_pass_system("multi_v3", name)
