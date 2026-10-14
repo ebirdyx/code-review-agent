@@ -79,3 +79,8 @@ not in `evaluation/cases` and `examples`).
 - A few dozen runs on small synthetic cases: indicative, not statistical.
 - One model, one reader for the hand labels, results vary from run to run.
 - Location matching cannot score defects that live outside the diff; those need hand labels.
+
+## 6. Comparing with a chat model (Claude, ChatGPT, ...)
+
+`eval-export` writes the exact single-pass prompt of each case as one paste-ready file; `eval-import` validates and scores the answers you paste back,
+so they appear in `eval-compare` next to the open-model configurations. The full procedure, with its fairness rules, is in `comparison-protocol.md`.

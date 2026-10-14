@@ -216,7 +216,7 @@ def _render_finding(rank: int, f: Finding, problems: list[ValidationProblem]) ->
         "",
         f"- **Category:** {f.category}",
         f"- **Location:** `{_location(f)}`",
-        f"- **Location and quotes:** "
+        "- **Location and quotes:** "
         + ("checked against the input" if not problems else "**NOT FULLY CONFIRMED**, see below"),
     ]
     if f.found_by:

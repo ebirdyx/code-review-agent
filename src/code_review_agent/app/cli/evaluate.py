@@ -1,4 +1,4 @@
-"""eval-run, eval-compare, eval-revalidate, eval-template, eval-score: measure the agent."""
+"""eval-run, eval-export, eval-import, eval-compare, eval-revalidate, eval-template, eval-score: measure the agent."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from ...connectors.snapshot import load_example
-from ...context.builder import DEFAULT_PROMPT_VERSION, build_context
+from ...context.builder import DEFAULT_MAX_CHARS, DEFAULT_PROMPT_VERSION, build_context
 from ...evaluation.comparison import (
     EvalConfig,
     EvalRunEntry,
@@ -19,6 +19,12 @@ from ...evaluation.comparison import (
     current_commit,
     now_iso,
     save_config,
+)
+from ...evaluation.manual import (
+    MANUAL_HOST,
+    export_prompt,
+    extract_json_object,
+    manual_record,
 )
 from ...evaluation.scoring import (
     EvaluationError,
@@ -43,7 +49,7 @@ from ...reporting.report import render_markdown
 from ...schemas import (
     ReviewResult,
 )
-from ..service import review_folder
+from ..service import finish_run, review_folder
 from .options import (
     CASE_ROOTS,
     EXPECTED_DIR,
@@ -77,26 +83,30 @@ def _eval_config(args: argparse.Namespace, settings: ModelSettings, kwargs: dict
     )
 
 
+def _select_cases(args: argparse.Namespace) -> tuple[str, list[str], list[Path]]:
+    """Which cases an evaluation covers: a split, or every example folder of --cases-dir.
+
+    Returns (name of the selection, case ids, folders to look for the cases in). Raises EvaluationError.
+    """
+    roots = list(args.cases_dir) if args.cases_dir else CASE_ROOTS
+    if args.cases_dir:  # custom cases: no split file applies, every example folder found is a case
+        case_ids = args.cases.split(",") if args.cases else _case_folders(roots)
+        if not case_ids:
+            raise EvaluationError(f"No example folders (with a pr.json) found in {', '.join(map(str, roots))}")
+        return "custom", case_ids, roots
+    split = load_split(args.split_file)
+    if args.split == "heldout" and not args.confirm_frozen:
+        raise EvaluationError(
+            "Held-out cases must only be run once the prompt is frozen, otherwise they stop being held out. "
+            "Re-run with --confirm-frozen to confirm."
+        )
+    return args.split, (args.cases.split(",") if args.cases else split.cases(args.split)), roots
+
+
 def eval_run_command(args: argparse.Namespace) -> int:
     """Run the model on every case of a split (or of --cases-dir), `--repeat` times, and record the configuration."""
-    roots = list(args.cases_dir) if args.cases_dir else CASE_ROOTS
     try:
-        if args.cases_dir:  # custom cases: no split file applies, every example folder found is a case
-            split_name = "custom"
-            case_ids = args.cases.split(",") if args.cases else _case_folders(roots)
-            if not case_ids:
-                raise EvaluationError(f"No example folders (with a pr.json) found in {', '.join(map(str, roots))}")
-        else:
-            split = load_split(args.split_file)
-            split_name = args.split
-            if args.split == "heldout" and not args.confirm_frozen:
-                print(
-                    "Held-out cases must only be run once the prompt is frozen, otherwise they stop "
-                    "being held out. Re-run with --confirm-frozen to confirm.",
-                    file=sys.stderr,
-                )
-                return 1
-            case_ids = args.cases.split(",") if args.cases else split.cases(args.split)
+        split_name, case_ids, roots = _select_cases(args)
         client = make_model_client(args)
         kwargs = pipeline_kwargs(args)
     except (OSError, ValidationError, EvaluationError) as exc:
@@ -140,6 +150,96 @@ def eval_run_command(args: argparse.Namespace) -> int:
             print(f"  {case_id} #{rep}: {result.status}, {detail}  ({folder.name})")
     print(f"Done. Next: review-agent eval-compare {runs_dir} [other folders...]  (or eval-template / eval-score for hand labels)")
     return 1 if failures else 0
+
+
+INSTRUCTIONS = """How to get an answer from a chat model (Claude, ChatGPT, ...) for each case
+
+1. Open a NEW chat for every case: a fresh conversation, with no memory of the earlier cases.
+2. Copy the WHOLE content of one <case>.txt file and paste it as your message. Add nothing, change nothing.
+3. Copy the model's answer exactly as it is, without fixing it, into the folder `answers/` as <case>.txt (same case name).
+4. Write down the exact model name and the date shown by the chat (for example "Claude Opus 4.1, 2026-10-15").
+5. When every case is done, import the answers so they are scored like the open models:
+
+   review-agent eval-import answers --label claude-chat --model "<exact model name>" --lenient  [same case options as the export]
+
+6. Do the same in another chat product with another --label, then:
+
+   review-agent eval-compare runs/eval-single-pass-... runs/eval-claude-chat-... runs/eval-chatgpt-chat-...
+
+Rules: the same text for every model; never edit an answer; never paste the expected answers or any answer key into a chat.
+"""
+
+
+def eval_export_command(args: argparse.Namespace) -> int:
+    """Write one paste-ready file per case: exactly the text the single-pass pipeline sends to a model."""
+    try:
+        split_name, case_ids, roots = _select_cases(args)
+        out = args.out
+        (out / "answers").mkdir(parents=True, exist_ok=True)
+        for case_id in case_ids:
+            ticket, review_input = load_example(find_case_dir(case_id, roots))
+            (out / f"{case_id}.txt").write_text(export_prompt(ticket, review_input, args.max_chars, args.prompt_version), encoding="utf-8")
+        (out / "INSTRUCTIONS.txt").write_text(INSTRUCTIONS, encoding="utf-8")
+    except (OSError, ValidationError, EvaluationError) as exc:
+        print(f"Cannot export: {exc}", file=sys.stderr)
+        return 1
+    print(f"Wrote {len(case_ids)} prompt file(s) ({split_name}) to {out}. Read {out / 'INSTRUCTIONS.txt'}, then paste each file into a new chat.")
+    return 0
+
+
+def eval_import_command(args: argparse.Namespace) -> int:
+    """Score answers pasted back from a chat: validate each like any model answer and save an evaluation folder."""
+    if args.model.strip().startswith("(none") or not args.model.strip():
+        print("Give the exact model name shown by the chat, for example --model \"Claude Opus 4.1\".", file=sys.stderr)
+        return 1
+    try:
+        split_name, case_ids, roots = _select_cases(args)
+        files = {p.stem: p for p in sorted(args.answers_dir.iterdir()) if p.suffix in (".txt", ".json", ".md") and p.is_file()}
+    except (OSError, ValidationError, EvaluationError) as exc:
+        print(f"Cannot import: {exc}", file=sys.stderr)
+        return 1
+    missing = [c for c in case_ids if c not in files]
+    unknown = sorted(set(files) - set(case_ids))
+    runs_dir = args.runs or Path("runs") / f"eval-{args.label}-{datetime.now(UTC):%Y%m%dT%H%M%S}"
+    entries: list[EvalRunEntry] = []
+    repaired = 0
+    for case_id in case_ids:
+        if case_id not in files:
+            continue
+        try:
+            ticket, review_input = load_example(find_case_dir(case_id, roots))
+            answer = files[case_id].read_text(encoding="utf-8")
+            if args.lenient:
+                answer, changed = extract_json_object(answer)
+                repaired += changed
+            record, sent = manual_record(case_id, answer, ticket, review_input, args.model.strip(), args.max_chars, args.prompt_version)
+            folder, result, _ = finish_run(record, sent, ticket, review_input, runs_dir)
+        except (OSError, ValidationError, EvaluationError) as exc:
+            print(f"  {case_id}: cannot import ({exc})", file=sys.stderr)
+            continue
+        entries.append(EvalRunEntry(case_id=case_id, rep=1, folder=folder.name, status=result.status))
+        detail = f"{len(result.findings)} finding(s), {len(result.problems)} unconfirmed" if result.status == "completed" else f"FAILED [{result.error.kind}] {result.error.message}"
+        print(f"  {case_id}: {result.status}, {detail}")
+    if not entries:
+        print(f"No answer file matched a case in {args.answers_dir} (files are named <case>.txt).", file=sys.stderr)
+        return 1
+    notes = ["Answers were produced in a chat interface, outside the tool, from the exported single-pass prompt. A chat may add hidden instructions or tools and does not enforce the JSON Schema."]
+    if args.lenient:
+        notes.append(f"{repaired} of {len(entries)} answer(s) had text around the JSON, which was removed before validation (--lenient).")
+    if missing:
+        notes.append(f"No answer for: {', '.join(missing)}.")
+    save_config(runs_dir, EvalConfig(
+        label=args.label, created_at=now_iso(), split=split_name, cases=case_ids, repeat=1, pipeline="single",
+        prompt_version=args.prompt_version, verify=False, tools=[], context=False, model=args.model.strip(), host=MANUAL_HOST,
+        agent_commit=current_commit(), notes=notes, runs=entries,
+    ))
+    print(f"Imported {len(entries)} of {len(case_ids)} answer(s) as '{args.label}' into {runs_dir}.")
+    for note in notes[1:]:
+        print(f"  note: {note}")
+    for name in unknown:
+        print(f"  ignored: {name} is not one of the selected cases", file=sys.stderr)
+    print(f"Next: review-agent eval-compare {runs_dir} [other folders...]")
+    return 0
 
 
 def eval_compare_command(args: argparse.Namespace) -> int:
@@ -246,18 +346,23 @@ def eval_score_command(args: argparse.Namespace) -> int:
 
 
 
+def add_case_args(parser: argparse.ArgumentParser) -> None:
+    """Which cases to evaluate: a split, some case ids, or every example folder of a --cases-dir."""
+    parser.add_argument("--split", choices=["dev", "heldout", "all"], default="dev")
+    parser.add_argument("--cases", help="comma-separated case ids instead of a whole split")
+    parser.add_argument("--split-file", type=Path, default=SPLIT_FILE)
+    parser.add_argument("--confirm-frozen", action="store_true", help="required for the held-out split")
+    parser.add_argument("--cases-dir", type=Path, action="append",
+                        help="folder of example folders to evaluate instead of the split (repeatable); every folder with a pr.json is a case")
+
+
 def register(sub: argparse._SubParsersAction) -> None:
     """Add this group's subcommands to the parser."""
     erun = sub.add_parser("eval-run", help="run the model on a whole split (needs the API key)")
-    erun.add_argument("--split", choices=["dev", "heldout", "all"], default="dev")
-    erun.add_argument("--cases", help="comma-separated case ids instead of a whole split")
+    add_case_args(erun)
     erun.add_argument("--repeat", type=int, default=1, help="runs per case (model output varies)")
     erun.add_argument("--runs", type=Path, help="output folder (default runs/eval-<split>-<time>)")
-    erun.add_argument("--split-file", type=Path, default=SPLIT_FILE)
-    erun.add_argument("--confirm-frozen", action="store_true", help="required for the held-out split")
     erun.add_argument("--label", help="name of this configuration in comparisons (default: made from the flags, e.g. multi-no-context)")
-    erun.add_argument("--cases-dir", type=Path, action="append",
-                          help="folder of example folders to evaluate instead of the split (repeatable); every folder with a pr.json is a case")
     add_model_args(erun)
     erun.set_defaults(handler=eval_run_command)
 
@@ -287,3 +392,21 @@ def register(sub: argparse._SubParsersAction) -> None:
     escore.add_argument("--expected", type=Path, default=EXPECTED_DIR)
     escore.add_argument("--split-file", type=Path, default=SPLIT_FILE)
     escore.set_defaults(handler=eval_score_command)
+
+    eexp = sub.add_parser("eval-export", help="write one paste-ready prompt file per case, to get answers from a chat model (Claude, ChatGPT...)")
+    add_case_args(eexp)
+    eexp.add_argument("--out", type=Path, default=Path("out/chat-prompts"), help="folder for the prompt files and INSTRUCTIONS.txt")
+    eexp.add_argument("--max-chars", type=int, default=DEFAULT_MAX_CHARS)
+    eexp.add_argument("--prompt-version", default=DEFAULT_PROMPT_VERSION, help="single-pass prompt set (default: the one eval-run --pipeline single uses)")
+    eexp.set_defaults(handler=eval_export_command)
+
+    eimp = sub.add_parser("eval-import", help="score answers pasted back from a chat model, like any model's answers (then use eval-compare)")
+    eimp.add_argument("answers_dir", type=Path, help="folder with one <case>.txt per case")
+    add_case_args(eimp)
+    eimp.add_argument("--label", required=True, help="name of this configuration in comparisons, e.g. claude-chat")
+    eimp.add_argument("--model", required=True, help="the exact model name and version shown by the chat")
+    eimp.add_argument("--runs", type=Path, help="output folder (default runs/eval-<label>-<time>)")
+    eimp.add_argument("--lenient", action="store_true", help="remove text around the JSON object before validating (counted and reported)")
+    eimp.add_argument("--max-chars", type=int, default=DEFAULT_MAX_CHARS)
+    eimp.add_argument("--prompt-version", default=DEFAULT_PROMPT_VERSION)
+    eimp.set_defaults(handler=eval_import_command)

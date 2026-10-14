@@ -65,6 +65,7 @@ class EvalConfig(StrictModel):
     temperature: float | None = None
     seed: int | None = None
     agent_commit: str | None = None
+    notes: list[str] = []  # how this configuration was produced, when that matters for reading the numbers
     runs: list[EvalRunEntry] = []
 
 
@@ -211,6 +212,9 @@ def render_comparison(results: list[ConfigResult], expected_dir: Path) -> str:
         tools = ",".join(c.tools) if c.tools else "off"
         out.append(f"| {r.label} | {c.pipeline} | {c.prompt_version} | {passes} | {tools} | {'on' if c.context else 'off'} | "
                    f"{'on' if c.verify else 'off'} | {c.model} | {c.repeat} | {len(r.runs)} | {c.agent_commit or 'n/a'} |")
+    notes = [(r.label, n) for r in results if r.config for n in r.config.notes]
+    if notes:
+        out += ["", "Notes on how these configurations were produced:", ""] + [f"- **{label}**: {note}" for label, note in notes]
     differing = _differences([r.config for r in results if r.config])
     out += ["", ("Configurations differ in: " + ", ".join(differing) + ".") if differing
             else "The configurations are identical in every recorded setting (only the runs differ).", ""]

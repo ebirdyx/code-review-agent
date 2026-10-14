@@ -236,6 +236,9 @@ uv run review-agent review-pr proprietaire/depot#12 --jira       # PR + ticket J
 uv run review-agent eval-run --split dev --repeat 3 --label multi-full   # appelle le modèle ; enregistre la configuration (eval-config.json)
 uv run review-agent eval-run --split dev --repeat 3 --pipeline single --label single-pass
 uv run review-agent eval-compare runs/eval-single-pass-* runs/eval-multi-full-*   # compare les configurations côte à côte (sans modèle)
+# Comparaison avec un agent plus avancé (Claude, ChatGPT...) utilisé dans un chat : voir docs/comparison-protocol.md
+uv run review-agent eval-export --split dev --out out/chat-prompts                  # un fichier à coller dans un NOUVEAU chat par cas
+uv run review-agent eval-import out/answers-claude --split dev --label claude-chat --model "<nom exact>" --lenient   # les réponses collées sont validées et notées comme celles des modèles ouverts
 uv run review-agent eval-template runs/eval-dev-<horodatage>     # propose des étiquettes
 uv run review-agent eval-score  runs/eval-dev-<horodatage> --labels evaluation/labels/<fichier>.json --split dev
 uv run review-agent eval-revalidate runs/eval-dev-<horodatage>   # revalide sans rappeler le modèle

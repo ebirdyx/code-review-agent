@@ -1,56 +1,73 @@
-# Comparing with Claude / ChatGPT / Gemini without an API key
+# Comparing with a more advanced agent (Claude, ChatGPT, Gemini) through a chat
 
-The course asks for a comparison with a costlier agent. A chat subscription is enough: the web chat gets exactly the
-same text our open model gets, and its answer goes through exactly the same validation and scoring.
+The course asks for a comparison with a more advanced, costlier agent. A chat subscription is enough: the chat gets exactly the same
+text our open model gets, and its answer is validated and scored by the same code (`eval-export`, `eval-import`, `eval-compare`).
 
-**Rules that keep the comparison fair**
+## What to compare
 
-- Same cases, same prompt version, same labelling grid, same validation for every model.
-- Use the **single-pass** prompt (`review_v1`, which is what `build-context` and `validate` use): one message in, one
-  JSON answer out. Run the open models with `--pipeline single --prompt-version review_v1` so everyone gets the same text.
-  (The multi-pass pipeline makes several calls; compare it model-to-model with the API profiles, not through a chat.)
-- One fresh conversation per case (no memory of earlier cases), the same instruction each time, note the model name
-  and the date shown by the chat.
-- Never edit the model's answer by hand. Paste it as is.
-- Do not paste confidential code into a chat tool. The benchmark cases are synthetic and safe to paste.
+| Configuration | What it tells you |
+|---|---|
+| open model, single pass (`eval-run --pipeline single`) | the model alone, on the same prompt the chat will get |
+| open model, our full pipeline (`eval-run`, multi-pass + tools) | what our scaffolding adds to the open model |
+| Claude in a chat (`eval-import`) | the advanced agent on the same prompt |
+| ChatGPT in a chat (`eval-import`) | a second advanced agent |
 
-## Steps for one case
+Comparing rows 1 and 3 isolates the model. Comparing row 2 with rows 3 and 4 asks the question the project is really about: can an open
+model, inside our pipeline, come close to an advanced model used plainly?
 
-1. Build the exact text the open model would receive:
+## Steps (about an hour for 9 cases and 2 chats)
 
-   ```powershell
-   uv run review-agent build-context evaluation/cases/<case> --out out/<case>.txt
-   ```
+```powershell
+# 0. the open-model side (needs the model key); repeat because answers vary
+uv run review-agent eval-run --split dev --repeat 3 --pipeline single --label single-pass
+uv run review-agent eval-run --split dev --repeat 3 --label multi-full
 
-   (For a real pull request, `fetch-pr` first, then `build-context` on the folder it created in `runs/pr-snapshots/`.)
+# 1. write one paste-ready file per case (the exact text the single-pass pipeline sends)
+uv run review-agent eval-export --split dev --out out/chat-prompts
+```
 
-2. Open a **new** chat. Paste the whole file (it has a SYSTEM MESSAGE part and a USER MESSAGE part; paste both, one
-   after the other, in one message). Add nothing else except: *"Answer with the JSON object only."* Send it.
+2. For each case, open a **new** chat, paste the **whole** content of `out/chat-prompts/<case>.txt`, add nothing, and copy the answer **unedited**
+   into `out/answers-claude/<case>.txt`. Note the exact model name and date the chat shows. Repeat in the other product
+   (`out/answers-chatgpt/`).
+3. Import each set so it is validated and scored like any model's answers:
 
-3. Copy the answer as is into `out/<case>.<model>.txt` (for example `out/safe-divide.claude-opus.txt`).
+```powershell
+uv run review-agent eval-import out/answers-claude  --split dev --label claude-chat  --model "<exact name and date>" --lenient
+uv run review-agent eval-import out/answers-chatgpt --split dev --label chatgpt-chat --model "<exact name and date>" --lenient
 
-4. Validate and report it, with no model call:
+# 4. side by side
+uv run review-agent eval-compare runs/eval-single-pass-* runs/eval-multi-full-* runs/eval-claude-chat-* runs/eval-chatgpt-chat-* --out evaluation/results/comparison.md
+```
 
-   ```powershell
-   uv run review-agent validate evaluation/cases/<case> out/<case>.<model>.txt
-   ```
+`--lenient` removes chatter around the JSON ("Here is my review: ...") before validation. It is counted and printed in the comparison, because
+a chat does not enforce the JSON Schema the way our API calls do. Without `--lenient`, such an answer is scored as a failed review.
 
-   This checks JSON, schema, files, lines and quotes exactly as for the open model, and writes a run folder in `runs/`.
+## Make the numbers trustworthy
 
-5. Score runs the same way as the open models (`eval-template`, fill in the labels, `eval-score`), using the same
-   labelling grid, ideally by someone who does not know which model wrote which answer.
+- **Label the findings by meaning, not only by location.** Without a labels file the comparison matches a finding to a defect by file and nearby line,
+  which is provisional. Use `eval-template` on each folder, correct the labels, write your name in `reviewed_by`, and save the file as `labels.json`
+  in the folder (see `evaluation-howto.md`). If you can, label the answers of all configurations together, shuffled, without knowing which model wrote which.
+- **Never let a tool or person who has seen the expected answers produce an answer.** The benchmark cases and their answers were written during the
+  development of this project: an assistant that helped write them must not be used as the "advanced agent" (the result would be contaminated).
+  Use fresh chats, and paste nothing but the exported file.
+- **Same text for every model**, one new chat per case, no edits to any answer.
 
-## What to record (one row per model)
+## What to report
 
-| Model | Date | Cases | Valid JSON | TP | FP | FN | Precision | Recall | Wrong line / invented quotes | Cost | Notes |
-|---|---|--:|--:|--:|--:|--:|--:|--:|--:|---|---|
+| Model | Date | Cases | Valid answers | TP | FP | FN | Precision | Recall | Wrong or invented locations | Answers repaired (`--lenient`) | Cost |
+|---|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|---|
 
-Cost: chat subscriptions have no per-answer cost; state the plan used and say the figure is not comparable with API prices.
-Compare also: how often the answer needed unwrapping (format notes), how many quotes did not exist in the input, and the
-model's stated limitations.
+`eval-compare` prints most of these. Add what it cannot count: how clear and actionable the explanations are (the usefulness rating 0-2 in the labels
+file), whether the quoted evidence is real (the "unconfirmed" column), how long it took, and the cost: chat subscriptions have no per-answer price,
+so state the plan used and say that the figure is not comparable with API prices.
 
-## Honest limits to state in the report
+## Optional: pull requests
 
-- A chat interface can add hidden instructions and tools; it is not a controlled API call.
-- Small, synthetic cases: the numbers are indicative, not statistics.
-- The human labelling grid is the same for all models, but the labeller's judgement is still human.
+`eval-export --cases-dir <folder of saved pull requests>` works the same way. The chat sees only the diff, the changed files and the ticket, not the
+repository context our pipeline adds: say so when you interpret the result.
+
+## Limits to state in the report
+
+- A chat interface can add hidden instructions or tools and is not a controlled API call; it also does not enforce the output schema.
+- A few cases, synthetic, one reader for the labels, one run per chat: indicative, not statistical.
+- Code pasted into a chat leaves your machine, exactly like code sent to a hosted model: use only the synthetic cases.

@@ -35,7 +35,7 @@ def profiles_command(args: argparse.Namespace) -> int:
         print(f"    licence of the weights: {p.licence or 'not stated'}   key: {key}   parallel requests: {p.max_concurrency}")
         if p.notes:
             print(f"    {p.notes}")
-    print(f"\n* = in use. Choose another with --profile NAME or REVIEW_AGENT_PROFILE=NAME.")
+    print("\n* = in use. Choose another with --profile NAME or REVIEW_AGENT_PROFILE=NAME.")
     return 0
 
 
