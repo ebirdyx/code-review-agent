@@ -121,3 +121,17 @@ no longer match a change), wrote the answer key first, and ran each with and wit
   matching is easy. This shows the feature works when it is needed, not how often real pull requests need it.
 - A method note: the first measurement (no effect) was a ceiling effect of easy cases, not evidence against the feature. A result of "no difference" needs
   a test that could have shown a difference.
+
+## 11. Follow-ups from the comparison with an advanced agent
+
+- **Merged findings: the requirement leads the headline.** On `load-config` the compliance pass had correctly marked the criterion NOT MET, but the merge gave the headline to a
+  speculative "arbitrary file read" claim because the more specific category won. A finding that states an unmet acceptance criterion now leads the title and explanation of a merged
+  finding (the category stays the most specific one; the other reports are appended as "Also reported by ..."). Tested; replayed on 257 saved runs: single-pass runs unchanged, 45
+  multi-pass runs changed, all of them runs where a criterion finding had merged with another report. Trade-off: where the defects pass had already written a crisp cause ("Off-by-one error
+  in password length validation") that title now sits in the explanation, and the headline restates the criterion.
+- **The "cannot determine" guidance does not cause wrong verdicts on clear criteria (in this experiment).** 81 compliance-only runs under three prompt sets: 15 of 15 violated criteria
+  were marked NOT MET with and without the guidance, and on the vague case the guidance moved "cannot determine" from 0 of 6 to 4 of 6. The one wrong verdict seen earlier was not reproduced
+  in 19 further runs of that case, with or without the static-analysis block: it looks like sampling noise (about 1 run in 22). See `evaluation/results/cannot-determine-experiment/`.
+- **Method lessons.** Location-only labels overstated the full pipeline until each finding was read; the suspicion that a prompt change caused an error was tested before acting on it and was not supported;
+  a rare wrong answer of a non-deterministic model needs many repeats before it can be attributed to anything.
+- **Label provenance** now says "AI assistant" instead of naming a product (the labels are still unconfirmed: `reviewed_by` is empty). Commits made before this change still contain the old wording.

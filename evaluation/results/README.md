@@ -16,6 +16,7 @@ Expected answers: the benchmark cases are in `../expected/*.json`; the demonstra
 | `ticket-system-demo-v3/` | 2026-10-14 | The same six pull requests after the first improvements (cross-category merge, consistency check, stricter rules pass) | multi-pass, `multi_v3` | gpt-oss:120b | 6 |
 | `context-ablation/` | 2026-10-14 | The six pull requests in three configurations: LLM only, + static tools, + repository context. README has the table; `../scripts/score_context_ablation.py` rebuilds it | multi-pass, `multi_v4` | gpt-oss:120b | 18 |
 | `context-dependent/` | 2026-10-14 | Three pull requests whose defect is only visible with the surrounding code, with and without repository context, three runs each | multi-pass, `multi_v4` | gpt-oss:120b | 18 |
+| `cannot-determine-experiment/` | 2026-10-14 | Does the "cannot determine" guidance of the compliance prompt cause wrong verdicts? 97 compliance-only runs under three prompt sets; raw verdicts in `verdicts.json` | compliance pass only, `multi_v2` / `multi_v3` / `multi_v4` | gpt-oss:120b | 97 |
 
 ## How to read them
 

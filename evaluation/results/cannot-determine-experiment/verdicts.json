@@ -1,0 +1,536 @@
+{
+ "multi_v2": {
+  "configuration": {
+   "pipeline": "multi",
+   "prompt_version": "multi_v2",
+   "passes": [
+    "compliance"
+   ],
+   "verify": false,
+   "tools": [],
+   "context": false,
+   "model": "gpt-oss:120b",
+   "agent_commit": "5a08219",
+   "repeat": 3
+  },
+  "verdicts": {
+   "free-shipping-faulty": [
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    }
+   ],
+   "free-shipping-fixed": [
+    {
+     "1": "met",
+     "2": "met"
+    },
+    {
+     "1": "met",
+     "2": "met"
+    },
+    {
+     "1": "met",
+     "2": "met"
+    }
+   ],
+   "free-shipping-ambiguous": [
+    {
+     "1": "met",
+     "2": "met"
+    },
+    {
+     "1": "met",
+     "2": "met"
+    },
+    {
+     "1": "met",
+     "2": "met"
+    }
+   ],
+   "password-min-length": [
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    }
+   ],
+   "discounted-total": [
+    {
+     "1": "not_met",
+     "2": "not_met"
+    },
+    {
+     "1": "not_met",
+     "2": "not_met"
+    },
+    {
+     "1": "not_met",
+     "2": "not_met"
+    }
+   ],
+   "marketing-opt-in": [
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    }
+   ],
+   "load-config": [
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    }
+   ],
+   "user-search-sql": [
+    {
+     "1": "met"
+    },
+    {
+     "1": "met"
+    },
+    {
+     "1": "met"
+    }
+   ],
+   "slugify-title": [
+    {
+     "1": "met",
+     "2": "met",
+     "3": "met"
+    },
+    {
+     "1": "met",
+     "2": "met",
+     "3": "met"
+    },
+    {
+     "1": "met",
+     "2": "met",
+     "3": "met"
+    }
+   ]
+  }
+ },
+ "multi_v3": {
+  "configuration": {
+   "pipeline": "multi",
+   "prompt_version": "multi_v3",
+   "passes": [
+    "compliance"
+   ],
+   "verify": false,
+   "tools": [],
+   "context": false,
+   "model": "gpt-oss:120b",
+   "agent_commit": "5a08219+uncommitted",
+   "repeat": 3
+  },
+  "verdicts": {
+   "free-shipping-faulty": [
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    }
+   ],
+   "free-shipping-fixed": [
+    {
+     "1": "met",
+     "2": "met"
+    },
+    {
+     "1": "met",
+     "2": "met"
+    },
+    {
+     "1": "met",
+     "2": "met"
+    }
+   ],
+   "free-shipping-ambiguous": [
+    {
+     "1": "cannot_determine",
+     "2": "met"
+    },
+    {
+     "1": "cannot_determine",
+     "2": "met"
+    },
+    {
+     "1": "cannot_determine",
+     "2": "cannot_determine"
+    }
+   ],
+   "password-min-length": [
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    }
+   ],
+   "discounted-total": [
+    {
+     "1": "not_met",
+     "2": "not_met"
+    },
+    {
+     "1": "not_met",
+     "2": "not_met"
+    },
+    {
+     "1": "not_met",
+     "2": "not_met"
+    }
+   ],
+   "marketing-opt-in": [
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    }
+   ],
+   "load-config": [
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    }
+   ],
+   "user-search-sql": [
+    {
+     "1": "met"
+    },
+    {
+     "1": "met"
+    },
+    {
+     "1": "met"
+    }
+   ],
+   "slugify-title": [
+    {
+     "1": "met",
+     "2": "met",
+     "3": "met"
+    },
+    {
+     "1": "met",
+     "2": "met",
+     "3": "met"
+    },
+    {
+     "1": "met",
+     "2": "met",
+     "3": "met"
+    }
+   ]
+  }
+ },
+ "multi_v4": {
+  "configuration": {
+   "pipeline": "multi",
+   "prompt_version": "multi_v4",
+   "passes": [
+    "compliance"
+   ],
+   "verify": false,
+   "tools": [],
+   "context": false,
+   "model": "gpt-oss:120b",
+   "agent_commit": "5a08219+uncommitted",
+   "repeat": 3
+  },
+  "verdicts": {
+   "free-shipping-faulty": [
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    }
+   ],
+   "free-shipping-fixed": [
+    {
+     "1": "met",
+     "2": "met"
+    },
+    {
+     "1": "met",
+     "2": "met"
+    },
+    {
+     "1": "met",
+     "2": "met"
+    }
+   ],
+   "free-shipping-ambiguous": [
+    {
+     "1": "cannot_determine",
+     "2": "cannot_determine"
+    },
+    {
+     "1": "met",
+     "2": "met"
+    },
+    {
+     "1": "cannot_determine",
+     "2": "cannot_determine"
+    }
+   ],
+   "password-min-length": [
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    }
+   ],
+   "discounted-total": [
+    {
+     "1": "not_met",
+     "2": "not_met"
+    },
+    {
+     "1": "not_met",
+     "2": "not_met"
+    },
+    {
+     "1": "not_met",
+     "2": "not_met"
+    }
+   ],
+   "marketing-opt-in": [
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    }
+   ],
+   "load-config": [
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    }
+   ],
+   "user-search-sql": [
+    {
+     "1": "met"
+    },
+    {
+     "1": "met"
+    },
+    {
+     "1": "met"
+    }
+   ],
+   "slugify-title": [
+    {
+     "1": "met",
+     "2": "met",
+     "3": "met"
+    },
+    {
+     "1": "met",
+     "2": "met",
+     "3": "met"
+    },
+    {
+     "1": "met",
+     "2": "met",
+     "3": "met"
+    }
+   ]
+  }
+ },
+ "multi_v4, load-config only, tools block on": {
+  "configuration": {
+   "pipeline": "multi",
+   "prompt_version": "multi_v4",
+   "passes": [
+    "compliance"
+   ],
+   "verify": false,
+   "tools": [
+    "ruff",
+    "bandit"
+   ],
+   "context": false,
+   "model": "gpt-oss:120b",
+   "agent_commit": "5a08219+uncommitted",
+   "repeat": 8
+  },
+  "verdicts": {
+   "load-config": [
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    }
+   ]
+  }
+ },
+ "multi_v4, load-config only, tools block off": {
+  "configuration": {
+   "pipeline": "multi",
+   "prompt_version": "multi_v4",
+   "passes": [
+    "compliance"
+   ],
+   "verify": false,
+   "tools": [],
+   "context": false,
+   "model": "gpt-oss:120b",
+   "agent_commit": "bd2e3d5",
+   "repeat": 8
+  },
+  "verdicts": {
+   "load-config": [
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    },
+    {
+     "1": "not_met",
+     "2": "met"
+    }
+   ]
+  }
+ }
+}
