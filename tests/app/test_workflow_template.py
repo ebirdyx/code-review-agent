@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-TEMPLATE = (Path(__file__).parent.parent / "integration" / "code-review.yml").read_text(encoding="utf-8")
+TEMPLATE = (Path(__file__).resolve().parents[2] / "integration" / "code-review.yml").read_text(encoding="utf-8")
 
 
 def test_only_the_needed_permissions_are_granted():

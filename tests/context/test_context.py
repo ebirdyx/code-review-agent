@@ -12,7 +12,7 @@ from code_review_agent.schemas import (
     Ticket,
 )
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 
 TWO_FILE_DIFF = """\
 diff --git a/a.py b/a.py

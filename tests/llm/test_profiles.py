@@ -243,7 +243,7 @@ def test_no_silent_retries(fake_openai):
 
 
 def test_ollama_receives_the_schema_given_per_call():
-    from test_model_client import FakeOllama
+    from tests.llm.test_model_client import FakeOllama
 
     server = FakeOllama()
     try:
@@ -270,6 +270,6 @@ def test_profiles_command_lists_profiles_and_never_prints_a_key(monkeypatch, cap
 def test_review_with_an_unknown_profile_stops_with_a_clear_message(capsys, tmp_path):
     from pathlib import Path
 
-    example = Path(__file__).resolve().parent.parent / "examples" / "free-shipping-faulty"
+    example = Path(__file__).resolve().parents[2] / "examples" / "free-shipping-faulty"
     assert main(["review", str(example), "--profile", "nope", "--runs", str(tmp_path)]) == 1
     assert "Unknown profile 'nope'" in capsys.readouterr().err

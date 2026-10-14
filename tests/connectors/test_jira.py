@@ -11,7 +11,6 @@ import json
 
 import httpx
 import pytest
-from test_github import HEAD, FakeGitHub  # reuse the fake GitHub from the Stage 6 tests
 
 from code_review_agent.app import cli, clients
 from code_review_agent.connectors.jira import (
@@ -32,6 +31,10 @@ from code_review_agent.schemas import (
     PullRequestMetadata,
     SupportingFile,
     Ticket,
+)
+from tests.connectors.test_github import (  # reuse the fake GitHub from the Stage 6 tests
+    HEAD,
+    FakeGitHub,
 )
 
 # ------------------------------------------------------------------ ADF builders
@@ -476,7 +479,7 @@ def test_unavailable_ticket_appears_in_the_prompt_and_as_partial_coverage():
 
 def test_quote_of_a_merged_criterion_without_its_tag_is_still_grounded():
     merged = merge_tickets([ticket("SHOP-1", "Orders ship free"), ticket("APP-2", "Under 100 pay")])
-    _, review_input = load_example(__import__("pathlib").Path(__file__).resolve().parent.parent / "examples" / "free-shipping-faulty")
+    _, review_input = load_example(__import__("pathlib").Path(__file__).resolve().parents[2] / "examples" / "free-shipping-faulty")
     f = Finding.model_validate({
         "category": "requirement_mismatch", "severity": "low", "file": "shop/shipping.py", "line": 6,
         "title": "t", "explanation": "e", "evidence": [{"source": "ticket", "quote": "Under 100 pay"}]})
@@ -593,7 +596,7 @@ def test_explicit_ticket_file_wins_over_jira(tmp_path, cli_with_fakes):
 
 
 def test_review_pr_end_to_end_with_pr_ticket_and_model_all_faked(tmp_path, cli_with_fakes):
-    from test_model_client import FakeOllama
+    from tests.llm.test_model_client import FakeOllama
 
     cli_with_fakes(fake_jira=FakeJira({**issues_for("SHOP-1", criteria=("f returns 2",))}), fake_github=FakeGitHub())
     server = FakeOllama(content='{"findings": [], "limitations": []}')

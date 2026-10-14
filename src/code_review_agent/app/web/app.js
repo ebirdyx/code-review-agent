@@ -5,7 +5,7 @@ const RECENT_REVIEWS = 3;  // individual reviews listed before "show older revie
 
 const state = {
   more: false, runs: [], groups: [], selected: null, detail: null, tab: "report", job: null, config: {}, draft: {},
-  filter: "", open: {}, view: "run", picked: new Set(), comparison: null,
+  filter: "", open: {}, view: "run", picked: new Set(), comparison: null, scope: "all", stats: null,
 };
 
 function el(tag, props, ...children) {
@@ -266,8 +266,8 @@ function rawView(detail) {
 
 // -------------------------------------------------------------------------- views
 
-function showEmpty() {
-  $view().replaceChildren(
+function whatItDoes() {
+  return el("div", {},
     el("h2", { text: "What this tool does" }),
     el("ol", { class: "steps" },
       el("li", { text: "Reads a GitHub pull request (read-only) and, if you ask, the Jira ticket it links to." }),
@@ -325,6 +325,68 @@ function renderRunList() {
   if (!rows.length) ul.append(el("li", { class: "hint", text: state.runs.length ? "No run matches the filter." : "No runs yet." }));
 }
 
+// ------------------------------------------------------------------------------- overview
+
+const SCOPES = [["all", "All runs"], ["reviews", "Individual reviews"], ["evaluations", "Evaluation runs"]];
+
+function viewTabs(current) {
+  return el("div", { class: "viewtabs" },
+    [["overview", "Overview", showOverview], ["evaluations", "Evaluations", showEvaluations]].map(([id, label, go]) =>
+      el("button", { class: current === id ? "on" : "", text: label, onclick: go })));
+}
+
+function statCard(label, value, note, tone) {
+  return el("div", { class: "stat" + (tone ? " " + tone : "") }, el("div", { class: "label", text: label }),
+    el("div", { class: "value", text: String(value) }), note ? el("div", { class: "note", text: note }) : null);
+}
+
+// One horizontal bar per row; the note says how many of those findings people accepted.
+function barPanel(title, rows, total, tone) {
+  const max = Math.max(1, ...rows.map((r) => r.n));
+  const body = rows.slice(0, 8).map((r) => {
+    const decided = r.accepted + r.dismissed;
+    const note = `${r.n} of ${total}` + (decided ? ` · ${r.accepted} of ${decided} accepted` : "");
+    const fill = el("div", { class: "fill" + (tone ? " " + r.name : "") });
+    fill.style.width = Math.round((r.n / max) * 100) + "%";  // set through the DOM: the page's CSP forbids inline style attributes
+    return el("div", { class: "bar" },
+      el("div", { class: "head" }, el("span", { text: r.name.replace(/_/g, " ") }), el("span", { text: note })),
+      el("div", { class: "track" }, fill));
+  });
+  return el("div", { class: "panel" }, el("h3", { text: title }), body.length ? body : el("p", { class: "hint", text: "Nothing yet." }));
+}
+
+function renderOverview() {
+  const st = state.stats;
+  const pills = el("div", { class: "pills" }, SCOPES.map(([id, label]) =>
+    el("button", { class: state.scope === id ? "on" : "", text: label, onclick: async () => { state.scope = id; await showOverview(); } })));
+  let body;
+  if (!st) body = el("p", { class: "hint", text: "Loading..." });
+  else {
+    const accepted = st.triaged ? `${st.accepted} of ${st.triaged} accepted` : "no human decisions yet";
+    body = el("div", {},
+      el("div", { class: "stats" },
+        statCard("Runs", st.runs, `${st.individual_runs} individual · ${st.evaluation_runs} in evaluations`),
+        statCard("Findings", st.findings, `${st.tool_backed} backed by a tool`),
+        statCard("High or critical", st.high, st.findings ? `${Math.round((st.high / st.findings) * 100)}% of findings` : "", st.high ? "bad" : ""),
+        statCard("Dismissed by verifier", st.verifier_dismissed, "claims the verifier did not confirm"),
+        statCard("Human decisions", st.triaged, accepted, st.triaged ? "good" : "")),
+      el("div", { class: "panels" },
+        barPanel("By severity", st.by_severity, st.findings, true),
+        barPanel("By category", st.by_category, st.findings),
+        barPanel("By who found it (a finding can have several)", st.by_found_by, st.findings)));
+  }
+  $view().replaceChildren(viewTabs("overview"), pills, body, whatItDoes());
+}
+
+async function showOverview() {
+  state.view = "overview"; state.selected = null; state.detail = null; state.job = null;
+  history.replaceState(null, "", "#overview");
+  renderRunList();
+  renderOverview();
+  try { state.stats = await api("/api/stats?scope=" + state.scope); } catch (e) { state.stats = null; }
+  if (state.view === "overview") renderOverview();
+}
+
 // ------------------------------------------------------------------------------- evaluations
 
 function configSummary(c) {
@@ -340,20 +402,35 @@ async function runComparison() {
   history.replaceState(null, "", "#evaluations&compare=" + names.map(encodeURIComponent).join(","));  // a link you can share or reopen
   try {
     const out = await api("/api/compare?groups=" + names.map(encodeURIComponent).join(","));
-    state.comparison = { ok: true, text: out.markdown };
+    state.comparison = { ok: true, text: out.markdown, configs: out.configs || [] };
   } catch (e) { state.comparison = { ok: false, text: e.message }; }
   renderEvaluations();
 }
 
+const pct = (x) => (x == null ? "n/a" : Math.round(x * 100) + "%");
+
+// One card per configuration: the numbers that decide which is better, marked provisional when labels are location-matched.
+function comparisonCards(configs) {
+  return el("div", { class: "stats" }, configs.map((c) =>
+    el("div", { class: "stat" }, el("div", { class: "label", text: c.label + (c.model ? " · " + c.model : "") }),
+      el("div", { class: "value", text: "F1 " + pct(c.f1) }),
+      el("div", { class: "note", text: `precision ${pct(c.precision)} · recall ${pct(c.recall)}` }),
+      el("div", { class: "note", text: `${c.tp} found · ${c.fp} false alarms · ${c.fn} missed` }),
+      el("div", { class: "note", text: `${c.runs - c.failed} of ${c.runs} runs completed` + (c.provisional ? " · labels provisional" : "") }))));
+}
+
 function renderEvaluations() {
   const compareButton = el("button", { class: "primary", text: "Compare selected" });
+  const clearButton = el("button", { text: "Clear" });
   const note = el("span", { class: "muted" });
   const paint = () => {
     const n = state.picked.size;
     compareButton.disabled = n < 1 || n > 6;
+    clearButton.disabled = n === 0;
     note.textContent = n ? `${n} selected` : "Tick one or more evaluations (at most 6).";
   };
   compareButton.onclick = () => { compareButton.disabled = true; runComparison(); };
+  clearButton.onclick = () => { state.picked.clear(); state.comparison = null; renderEvaluations(); };
   const rows = state.groups.map((g) => {
     const box = el("input", { type: "checkbox" });
     box.checked = state.picked.has(g.name);
@@ -371,12 +448,15 @@ function renderEvaluations() {
       } })));
   });
   const head = el("thead", {}, el("tr", {}, ["", "Evaluation", "Runs", "Latest", "Configuration", ""].map((h) => el("th", { text: h }))));
+  const result = state.comparison;
   $view().replaceChildren(...[
-    el("h2", { text: "Evaluations" }),
-    el("p", { class: "muted", text: "Each folder is one configuration run on the same cases. Tick two or more and compare them side by side: the same table as `review-agent eval-compare`. Labels are location-matched unless a labels file exists, and the table says so." }),
-    state.groups.length ? el("table", { class: "evals" }, head, el("tbody", {}, rows)) : el("p", { class: "hint", text: "No evaluation folders yet. Make one with review-agent eval-run." }),
-    el("div", { class: "triage" }, compareButton, note),
-    state.comparison ? (state.comparison.ok ? renderMarkdown(state.comparison.text) : el("div", { class: "banner bad", text: state.comparison.text })) : null,
+    viewTabs("evaluations"),
+    el("div", { class: "actionbar" }, compareButton, clearButton, note, el("span", { class: "spacer" }),
+      el("span", { class: "muted", text: "Same table as `review-agent eval-compare`. Labels are location-matched unless a labels file exists." })),
+    state.groups.length ? el("div", { class: "tablebox" }, el("table", { class: "evals" }, head, el("tbody", {}, rows)))
+      : el("p", { class: "hint", text: "No evaluation folders yet. Make one with review-agent eval-run." }),
+    result && result.ok && result.configs.length ? comparisonCards(result.configs) : null,
+    result ? (result.ok ? renderMarkdown(result.text) : el("div", { class: "banner bad", text: result.text })) : null,
   ].filter(Boolean));
   paint();
 }
@@ -384,6 +464,7 @@ function renderEvaluations() {
 async function showEvaluations() {
   state.view = "evaluations"; state.selected = null; state.detail = null; state.job = null;
   history.replaceState(null, "", "#evaluations");
+  renderRunList();
   await refreshRuns();
   renderEvaluations();
 }
@@ -468,7 +549,7 @@ async function startReview(event) {
 
 async function init() {
   document.getElementById("new-review").addEventListener("submit", startReview);
-  document.getElementById("show-evals").addEventListener("click", showEvaluations);
+  document.getElementById("show-overview").addEventListener("click", showOverview);
   document.getElementById("filter").addEventListener("input", (e) => { state.filter = e.target.value; renderRunList(); });
   try {
     state.config = await api("/api/config");
@@ -477,16 +558,17 @@ async function init() {
       ? `new reviews will use: ${c.model} · ${c.pipeline || "multi"}-pass · prompt ${c.prompt_version}` : "";
     if (!state.config.can_start) document.getElementById("start").disabled = true;
   } catch (e) { /* ignore */ }
-  showEmpty();
+  const startHash = location.hash;  // showOverview rewrites it, so read it first
   await refreshRuns();
-  const evalLink = location.hash.match(/^#evaluations(?:&compare=([^&]+))?/);  // deep link: #evaluations&compare=<folder>,<folder>
+  await showOverview();
+  const evalLink = startHash.match(/^#evaluations(?:&compare=([^&]+))?/);  // deep link: #evaluations&compare=<folder>,<folder>
   if (evalLink) {
     const names = evalLink[1] ? decodeURIComponent(evalLink[1]).split(",").filter(Boolean) : [];
     for (const n of names) state.picked.add(n);
     await showEvaluations();
     if (names.length) await runComparison();
   }
-  const link = location.hash.match(/^#run=([^&]+)(?:&tab=(\w+))?/);  // deep link: #run=<name>&tab=findings
+  const link = startHash.match(/^#run=([^&]+)(?:&tab=(\w+))?/);  // deep link: #run=<name>&tab=findings
   if (link) {
     if (["report", "findings", "timeline", "raw"].includes(link[2])) state.tab = link[2];
     await selectRun(decodeURIComponent(link[1]));

@@ -9,7 +9,6 @@ import shutil
 from pathlib import Path
 
 import pytest
-from test_model_client import FakeOllama
 
 from code_review_agent.app.cli import main
 from code_review_agent.evaluation.comparison import (
@@ -31,8 +30,9 @@ from code_review_agent.evaluation.scoring import (
     build_label_template,
     discover_runs,
 )
+from tests.llm.test_model_client import FakeOllama
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 EXPECTED = ROOT / "evaluation" / "expected"
 CASES = "free-shipping-faulty,free-shipping-fixed"
 

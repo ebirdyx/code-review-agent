@@ -9,7 +9,6 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
-from test_github import BASE, HEAD, FakeGitHub, client
 
 from code_review_agent.connectors.github import (
     ARCHIVE_HOSTS,
@@ -34,6 +33,7 @@ from code_review_agent.schemas import (
     ReviewInput,
     ReviewResult,
 )
+from tests.connectors.test_github import BASE, HEAD, FakeGitHub, client
 
 SERVICE = "def f():\n    x = 2\n    return x\n"
 CALLER = "from app import f\n\n\ndef job():\n    return f()\n"

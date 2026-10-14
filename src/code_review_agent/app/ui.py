@@ -7,6 +7,7 @@ files from the package, and exposes a few JSON endpoints over the run folders:
   GET  /api/runs                   list of runs (live status for running ones), each with its evaluation `group`
   GET  /api/groups                 the evaluation folders: runs, outcome, recorded configuration
   GET  /api/compare?groups=a,b     the side-by-side comparison of evaluation folders (same as `eval-compare`)
+  GET  /api/stats?scope=all        what the runs found, in numbers (scope: all | reviews | evaluations)
   GET  /api/runs/<name>            report, result, run record, events, triage of one run
   POST /api/runs/<name>/triage     save accept/dismiss decisions for the findings
   POST /api/review                 start a review of a pull request in the background
@@ -25,6 +26,7 @@ import re
 import threading
 import time
 import uuid
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -38,7 +40,7 @@ from pydantic import ValidationError
 
 from ..connectors.github import GitHubError, parse_pr_reference
 from ..evaluation.comparison import CONFIG_NAME, compare
-from ..evaluation.scoring import EvaluationError
+from ..evaluation.scoring import EvaluationError, totals
 from ..events import EventLog, read_events
 from ..reporting.report import render_triage_section
 from ..schemas import ReviewResult, TriageFile
@@ -48,6 +50,8 @@ MAX_BODY = 64 * 1024
 MAX_RUNNING_JOBS = 2
 MAX_LISTED = 1000  # runs returned by /api/runs (the page groups and filters them)
 MAX_COMPARED = 6  # evaluation folders in one comparison
+SCOPES = ("all", "reviews", "evaluations")  # which runs the overview counts
+SEVERITY_ORDER = ("critical", "high", "medium", "low")
 CONFIG_FIELDS = ("pipeline", "prompt_version", "passes", "model", "tools", "context", "verify", "repeat", "split", "agent_commit", "notes")
 RUNNING_FRESH_SECONDS = 600  # a run with no result and no activity for this long is "interrupted"
 STATIC = {"app.js": "text/javascript; charset=utf-8", "app.css": "text/css; charset=utf-8"}
@@ -76,6 +80,7 @@ class UIApp:
     lock: threading.Lock = field(default_factory=threading.Lock)
     expected_dir: Path = Path("evaluation/expected")  # expected answers, needed to score a comparison
     _summaries: dict = field(default_factory=dict)  # finished runs only: folder -> (file signature, summary)
+    _stats: dict = field(default_factory=dict)  # finished runs only: folder -> (file signature, what its findings were)
 
     # ------------------------------------------------------------------ runs
 
@@ -190,8 +195,11 @@ class UIApp:
             return None
         return path if inside and path.is_dir() else None
 
-    def compare_groups(self, names: list[str]) -> str:
-        """The comparison table (Markdown) of evaluation folders. Raises ValueError with a message for the user."""
+    def compare_groups(self, names: list[str]) -> tuple[str, list[dict]]:
+        """The comparison table (Markdown) of evaluation folders, and one summary per configuration (for the cards).
+
+        Raises ValueError with a message for the user.
+        """
         if not 1 <= len(names) <= MAX_COMPARED:
             raise ValueError(f"choose between 1 and {MAX_COMPARED} evaluations")
         folders = []
@@ -203,10 +211,88 @@ class UIApp:
         if not self.expected_dir.is_dir():
             raise ValueError(f"the expected answers ({self.expected_dir}) were not found: start the UI from the repository root")
         try:
-            text, _ = compare(folders, self.expected_dir)
+            text, results = compare(folders, self.expected_dir)
         except (EvaluationError, OSError, ValidationError) as exc:
             raise ValueError(str(exc).splitlines()[0][:400]) from exc
-        return text
+        configs = []
+        for r in results:
+            t = totals(r.scores)
+            configs.append({
+                "label": r.label, "model": r.config.model if r.config else "", "runs": t.runs, "failed": t.failed,
+                "tp": t.tp, "fp": t.fp, "fn": t.fn, "precision": t.precision, "recall": t.recall, "f1": t.f1,
+                "provisional": "confirmed by" not in r.label_basis,
+            })
+        return text, configs
+
+    # ------------------------------------------------------------------ overview numbers
+
+    def run_stats(self, folder: Path) -> dict | None:
+        """What one finished run found, with the human decisions on it. Cached until its files change."""
+        signature = _signature(folder)
+        cached = self._stats.get(folder)
+        if cached and cached[0] == signature:
+            return cached[1]
+        result = _read_json(folder / "result.json")
+        if result is None:
+            return None
+        decisions = {d.get("finding_index"): d.get("decision") for d in (_read_json(folder / "triage.json") or {}).get("decisions", [])}
+        stats = {
+            "findings": [{"severity": f.get("severity"), "category": f.get("category"), "found_by": f.get("found_by") or [],
+                          "tool": f.get("source") == "tool", "decision": decisions.get(i)}
+                         for i, f in enumerate(result.get("findings", []))],
+            "dismissed": len(result.get("dismissed", [])),
+        }
+        self._stats[folder] = (signature, stats)
+        return stats
+
+    def stats(self, scope: str) -> dict:
+        """Numbers over the finished runs: how many, what they found, how serious, what people accepted."""
+        if scope not in SCOPES:
+            raise ValueError(f"scope must be one of: {', '.join(SCOPES)}")
+        counters = {k: {} for k in ("severity", "category", "found_by")}
+        total = {"runs": 0, "individual": 0, "evaluation": 0, "findings": 0, "tool": 0, "verifier_dismissed": 0, "accepted": 0, "rejected": 0}
+
+        def count(kind: str, name: str, decision: str | None) -> None:
+            entry = counters[kind].setdefault(name, Counter())
+            entry["n"] += 1
+            if decision in ("accepted", "dismissed"):
+                entry[decision] += 1
+
+        for folder in self.run_folders():
+            nested = "/" in self.rel(folder)
+            if (scope == "reviews" and nested) or (scope == "evaluations" and not nested):
+                continue
+            run = self.run_stats(folder)
+            if run is None:
+                continue
+            total["runs"] += 1
+            total["evaluation" if nested else "individual"] += 1
+            total["verifier_dismissed"] += run["dismissed"]
+            for f in run["findings"]:
+                total["findings"] += 1
+                total["tool"] += f["tool"]
+                total["accepted"] += f["decision"] == "accepted"
+                total["rejected"] += f["decision"] == "dismissed"
+                count("severity", f["severity"] or "unknown", f["decision"])
+                count("category", f["category"] or "unknown", f["decision"])
+                for who in f["found_by"] or ["not recorded"]:
+                    count("found_by", who, f["decision"])
+
+        def rows(kind: str, order: tuple[str, ...] | None = None) -> list[dict]:
+            names = sorted(counters[kind], key=lambda n: (-counters[kind][n]["n"], n))
+            if order:
+                names = [n for n in order if n in counters[kind]] + [n for n in names if n not in order]
+            return [{"name": n, "n": counters[kind][n]["n"], "accepted": counters[kind][n]["accepted"],
+                     "dismissed": counters[kind][n]["dismissed"]} for n in names]
+
+        by_severity = rows("severity", SEVERITY_ORDER)
+        return {
+            "scope": scope, "runs": total["runs"], "individual_runs": total["individual"], "evaluation_runs": total["evaluation"],
+            "findings": total["findings"], "high": sum(r["n"] for r in by_severity if r["name"] in ("critical", "high")),
+            "tool_backed": total["tool"], "verifier_dismissed": total["verifier_dismissed"],
+            "accepted": total["accepted"], "triaged": total["accepted"] + total["rejected"],
+            "by_severity": by_severity, "by_category": rows("category"), "by_found_by": rows("found_by"),
+        }
 
     def run_detail(self, folder: Path) -> dict:
         return {
@@ -360,7 +446,13 @@ def make_server(app: UIApp, port: int = 8765, host: str = "127.0.0.1") -> Thread
             if path == "/api/compare":
                 names = [n for n in parse_qs(parsed.query).get("groups", [""])[0].split(",") if n]
                 try:
-                    return self._json(HTTPStatus.OK, {"markdown": app.compare_groups(names)})
+                    markdown, configs = app.compare_groups(names)
+                    return self._json(HTTPStatus.OK, {"markdown": markdown, "configs": configs})
+                except ValueError as exc:
+                    return self._error(HTTPStatus.BAD_REQUEST, str(exc))
+            if path == "/api/stats":
+                try:
+                    return self._json(HTTPStatus.OK, app.stats(parse_qs(parsed.query).get("scope", ["all"])[0]))
                 except ValueError as exc:
                     return self._error(HTTPStatus.BAD_REQUEST, str(exc))
             if path.startswith("/api/runs/"):

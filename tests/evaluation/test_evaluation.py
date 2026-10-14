@@ -8,7 +8,6 @@ import json
 from pathlib import Path
 
 import pytest
-from test_model_client import FakeOllama
 
 from code_review_agent.app.cli import main
 from code_review_agent.connectors.snapshot import load_example, load_expected
@@ -46,8 +45,9 @@ from code_review_agent.schemas import (
     ReviewResult,
     ValidationProblem,
 )
+from tests.llm.test_model_client import FakeOllama
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 CASES = ROOT / "evaluation" / "cases"
 EXAMPLES = ROOT / "examples"
 EXPECTED = ROOT / "evaluation" / "expected"

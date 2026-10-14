@@ -329,7 +329,7 @@ def test_report_names_the_exact_revision_reviewed(tmp_path):
 
 
 def test_local_examples_have_no_revision():
-    ticket, review_input = load_example(Path(__file__).resolve().parent.parent / "examples" / "free-shipping-faulty")
+    ticket, review_input = load_example(Path(__file__).resolve().parents[2] / "examples" / "free-shipping-faulty")
     record, _ = run_review("c", ticket, review_input, _Recorder(), 30000)
     assert record.revision is None
     assert "Revision reviewed" not in render_markdown(finalize_review(record, ticket, review_input))
@@ -361,7 +361,7 @@ def test_fetch_pr_cli_reports_errors_without_traceback(tmp_path, monkeypatch, ca
 
 
 def test_review_pr_cli_end_to_end_with_fake_github_and_fake_ollama(tmp_path, monkeypatch):
-    from test_model_client import FakeOllama
+    from tests.llm.test_model_client import FakeOllama
 
     fake = FakeGitHub()
     monkeypatch.setattr(clients, "github_client", lambda: GitHubClient(transport=httpx.MockTransport(fake)))

@@ -30,7 +30,7 @@ from code_review_agent.pipeline.records import save_run
 from code_review_agent.pipeline.validation import finalize_review
 from code_review_agent.schemas import WHOLE_CHANGE, FailureKind, Finding, ProblemKind
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 EXAMPLES = ROOT / "examples"
 
 TICKET_QUOTE = {"source": "ticket", "quote": "Orders of $100 or more ship for free."}
@@ -715,7 +715,7 @@ def test_single_pass_report_has_no_checklist_or_pass_table():
 
 
 def test_cli_runs_the_multi_pass_pipeline_with_chosen_passes(tmp_path, capsys):
-    from test_model_client import FakeOllama
+    from tests.llm.test_model_client import FakeOllama
 
     server = FakeOllama(content='{"findings": [], "limitations": []}')
     try:
@@ -730,7 +730,7 @@ def test_cli_runs_the_multi_pass_pipeline_with_chosen_passes(tmp_path, capsys):
 
 
 def test_cli_rejects_unknown_passes_with_a_clear_message(tmp_path, capsys):
-    from test_model_client import FakeOllama
+    from tests.llm.test_model_client import FakeOllama
 
     server = FakeOllama()
     try:

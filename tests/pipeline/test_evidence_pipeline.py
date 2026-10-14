@@ -7,11 +7,6 @@ Ruff and Bandit; only the tool-failure tests patch them. GitHub is the fake tran
 import json
 from pathlib import Path
 
-from test_github import BASE, FakeGitHub, file_json
-from test_github import client as gh_client
-from test_pipeline import ScriptedClient, j, verdict
-from test_pipeline import finding as model_finding
-
 from code_review_agent.app import cli
 from code_review_agent.app.service import review_folder
 from code_review_agent.connectors.github import GitHubClient
@@ -25,8 +20,12 @@ from code_review_agent.pipeline.passes import load_pass_system
 from code_review_agent.pipeline.validation import finalize_review
 from code_review_agent.reporting.report import render_markdown
 from code_review_agent.schemas import FailureKind, ModelReview, public_schema
+from tests.connectors.test_github import BASE, FakeGitHub, file_json
+from tests.connectors.test_github import client as gh_client
+from tests.pipeline.test_pipeline import ScriptedClient, j, verdict
+from tests.pipeline.test_pipeline import finding as model_finding
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 CASES = ROOT / "evaluation" / "cases"
 
 SQL_LINE = "query = f\"SELECT id, name, email FROM users WHERE name = '{name}'\""
@@ -333,7 +332,7 @@ def test_re_validation_works_for_a_run_with_tools_and_rules_and_notices_a_change
 
 
 def test_cli_flags_choose_tools_and_rules(tmp_path, capsys):
-    from test_model_client import FakeOllama
+    from tests.llm.test_model_client import FakeOllama
 
     rules = tmp_path / "rules.md"
     rules.write_text(RULES, encoding="utf-8")
@@ -351,7 +350,7 @@ def test_cli_flags_choose_tools_and_rules(tmp_path, capsys):
 
 
 def test_cli_no_tools_and_unknown_tool(tmp_path, capsys):
-    from test_model_client import FakeOllama
+    from tests.llm.test_model_client import FakeOllama
 
     server = FakeOllama(content='{"findings": [], "limitations": []}')
     try:

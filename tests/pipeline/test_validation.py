@@ -32,7 +32,7 @@ from code_review_agent.schemas import (
     SupportingFile,
 )
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 RAW = ROOT / "tests" / "fixtures" / "raw"
 EXAMPLES = ROOT / "examples"
 

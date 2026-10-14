@@ -20,7 +20,7 @@ from code_review_agent.pipeline.records import save_run
 from code_review_agent.pipeline.single import run_review
 from code_review_agent.schemas import FailureKind
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 
 
 class FakeOllama:

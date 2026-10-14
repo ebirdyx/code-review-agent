@@ -6,7 +6,7 @@ import sys
 import tomllib
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_the_review_agent_command_points_at_a_real_callable():

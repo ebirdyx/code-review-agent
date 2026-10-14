@@ -3,7 +3,6 @@
 from pathlib import Path
 
 import pytest
-from test_evaluation import write_run  # helper that builds a saved run folder
 
 from code_review_agent.app.cli import main
 from code_review_agent.connectors.snapshot import load_example
@@ -13,8 +12,11 @@ from code_review_agent.context.builder import (
     build_context,
     load_system_prompt,
 )
+from tests.evaluation.test_evaluation import (
+    write_run,  # helper that builds a saved run folder
+)
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 EXAMPLE = ROOT / "examples" / "free-shipping-faulty"
 
 

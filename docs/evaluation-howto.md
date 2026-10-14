@@ -87,6 +87,6 @@ so they appear in `eval-compare` next to the open-model configurations. The full
 
 ## 7. In the web interface
 
-`review-agent ui --open` also shows the evaluations: the **Evaluations** button lists every evaluation folder with its recorded configuration and outcome, and **Compare selected** renders
-the same table as `eval-compare` (open `http://127.0.0.1:8765/#evaluations&compare=<folder>,<folder>` to go straight to a comparison). The run list is grouped by evaluation folder and has a filter box.
+`review-agent ui --open` also shows the evaluations: the **Overview** tab shows totals, severity, category and who found what (with how many were accepted), and the **Evaluations** tab lists every evaluation folder with its recorded configuration and outcome. **Compare selected** (in the bar above the list) renders
+the same table as `eval-compare`, with one summary card per configuration (open `http://127.0.0.1:8765/#evaluations&compare=<folder>,<folder>` to go straight to a comparison). The run list is grouped by evaluation folder and has a filter box.
 The UI must be started from the repository root, because the comparison needs `evaluation/expected/`.

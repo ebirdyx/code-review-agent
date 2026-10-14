@@ -18,18 +18,18 @@ modèle de langage **à poids ouverts** via Ollama, puis produit des constats st
 | Validation de la sortie (JSON, schéma, fichier, ligne, citations, doublons) | Fait, testé |
 | Rapports JSON et Markdown | Fait, testé |
 | Banc d'essai (22 cas Python, séparation dev / hold-out, précision, rappel, F1) | Fait. **Étiquettes à valider par un humain** |
-| **Pipeline multi-passes** (par défaut) : 3 spécialistes (conformité au ticket critère par critère, défauts, sécurité), fusion des doublons, puis passe de **vérification** qui peut écarter un constat (toujours visible, avec la raison) | Fait, testé (352 tests dont une exécution réelle avec `gpt-oss:120b`). **Qualité pas encore mesurée** sur le banc d'essai |
+| **Pipeline multi-passes** (par défaut) : 4 spécialistes (conformité au ticket critère par critère, défauts, sécurité, règles d'équipe), fusion des doublons, puis passe de **vérification** qui peut écarter un constat (toujours visible, avec la raison) | Fait, testé (tests automatiques ; exécutions réelles avec `gpt-oss:120b` et Qwen). Qualité **mesurée seulement sur peu de cas** (banc d'essai de développement et PR de démonstration, voir `evaluation/results/`) : aucun chiffre n'est définitif |
 | **Analyse statique** (Ruff + Bandit, Python) : avertissements déterministes sur les lignes modifiées, fusionnés avec les constats du modèle et fournis aux passes comme pistes | Fait, testé avec les vrais outils et sur une vraie PR (pallets/click) |
 | **Règles d'équipe** (`.review-agent/rules.md` lu sur la branche de base, ou `--rules`) vérifiées par une passe dédiée | Fait, testé (modèle simulé) et sur 4 exécutions réelles |
 | **Profil du changement** (taille, tests modifiés ou non, zones sensibles, dépendances, CI), sans modèle | Fait, testé |
 | **Contexte du dépôt** (graphe de code léger, Python) : pour chaque fonction modifiée, ses appelants, les fonctions qu'elle appelle, les tests qui la mentionnent et le constructeur de sa classe, trouvés avec `ast` dans une seule archive téléchargée | Fait, testé (simulation) et essayé sur les PR de démonstration. Effet **mesuré sur 6 + 3 PR seulement** : aucun effet quand le défaut est visible dans le diff, nette amélioration (9 trouvés sur 9 contre 2 sur 9) sur 3 PR conçues pour que le défaut soit hors du diff : voir `evaluation/results/context-ablation/` et `evaluation/results/context-dependent/` |
 | **Profils de modèles** (`--profile`) : Ollama local ou cloud, Qwen2.5-Coder via un service hébergé compatible OpenAI (OpenRouter) | Fait. **Exécutions réelles** de Qwen2.5-Coder 32B et Qwen3-Coder 30B via OpenRouter sur la PR de démonstration (voir `docs/model-comparison-notes.md`). Qwen local (Ollama) **pas encore exécuté** |
-| Suivi en direct (événements dans le terminal et `events.jsonl`) et interface web locale (liste des revues, rapport, constats, chronologie, accepter / rejeter chaque constat, lancer une revue de PR) | Fait, testé (serveur réel en local, page vérifiée dans un vrai navigateur) |
+| Suivi en direct (événements dans le terminal et `events.jsonl`) et interface web locale (vue d'ensemble avec indicateurs, liste des revues groupée et filtrable, vue Evaluations avec comparaison côte à côte, rapport, constats, chronologie, accepter / rejeter chaque constat, lancer une revue de PR) | Fait, testé (serveur réel en local, page vérifiée dans un vrai navigateur) |
 | Lecture d'une Pull Request GitHub (lecture seule, révision exacte enregistrée) | Fait, testé avec simulation et avec l'API réelle (lecture seulement) |
 | Revue d'une PR GitHub + ticket Jira liée, par le modèle | Fait et exécuté pour de vrai (PR `ebirdyx/shipping-demo#1` + `KAN-4`, `gpt-oss:120b`) : voir `evaluation/results/real-pr-demo/` |
 | Tickets Jira (lecture seule, lien PR → ticket, critères d'acceptation, tickets multiples ou indisponibles) | Fait. Testé avec simulation **et sur un vrai site Jira Cloud** (`fetch-ticket KAN-4` : critères lus dans la section de la description). Le cas « champ personnalisé » n'a été testé qu'avec simulation |
 | Commentaire unique et auto-mis à jour sur la PR (`--post-comment`) et modèle de workflow GitHub Actions (`integration/code-review.yml`) | Fait et testé (simulation). **Pas encore actif sur un vrai dépôt** : voir « Intégration GitHub Actions » |
-| Comparaison avec Claude / ChatGPT / Gemini | **À faire** : protocole dans `docs/comparison-protocol.md` |
+| Comparaison avec Claude / ChatGPT / Gemini | Outillage prêt (`eval-export`, `eval-import`, `eval-compare`, protocole dans `docs/comparison-protocol.md`). **Résultats à produire** par l'équipe, dans des fenêtres de chat neuves |
 | Banc d'essai sur un modèle local libre (Qwen2.5-Coder, etc.) | **À faire** (l'outil le permet déjà) |
 
 ## Architecture et responsabilités
@@ -151,7 +151,7 @@ Prérequis : [uv](https://docs.astral.sh/uv/) (gère Python 3.12 automatiquement
 git clone https://github.com/ebirdyx/code-review-agent.git
 cd code-review-agent
 uv sync
-uv run pytest -q          # 440+ tests, aucun ne nécessite de modèle ni de réseau (Ruff et Bandit réels, modèle et GitHub simulés)
+uv run pytest -q          # 600+ tests, aucun ne nécessite de modèle ni de réseau (Ruff et Bandit réels, modèle et GitHub simulés)
 uv run review-agent check-examples
 ```
 

@@ -15,12 +15,12 @@ import urllib.request
 from pathlib import Path
 
 import pytest
-from test_evaluation import write_run
 
 from code_review_agent.app.ui import UIApp, make_server
 from code_review_agent.events import EventLog
+from tests.evaluation.test_evaluation import write_run
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 FAULTY = (ROOT / "tests/fixtures/raw/real-gpt-oss-faulty.json").read_text(encoding="utf-8")
 HEADERS = {"Content-Type": "application/json", "X-Requested-With": "review-agent-ui"}
 
@@ -421,7 +421,7 @@ def test_groups_describe_each_evaluation_folder_and_its_recorded_configuration(u
 
 
 def test_comparison_endpoint_renders_the_same_table_as_eval_compare(ui):
-    from test_comparison import FINDING, NOTHING, run_eval
+    from tests.evaluation.test_comparison import FINDING, NOTHING, run_eval
 
     app, client, _ = ui
     app.expected_dir = ROOT / "evaluation" / "expected"
@@ -431,6 +431,9 @@ def test_comparison_endpoint_renders_the_same_table_as_eval_compare(ui):
     assert status == 200
     text = data["markdown"]
     assert "| finds-it |" in text and "| misses-it |" in text and "PROVISIONAL" in text and "## Per case" in text
+    cards = {c["label"]: c for c in data["configs"]}
+    assert set(cards) == {"finds-it", "misses-it"} and all(c["provisional"] for c in cards.values())
+    assert cards["finds-it"]["tp"] > cards["misses-it"]["tp"] and cards["misses-it"]["tp"] == 0
 
 
 @pytest.mark.parametrize("query, message", [
@@ -512,8 +515,8 @@ def test_the_list_is_long_enough_for_a_real_evaluation_history_and_still_capped(
 def test_the_page_has_the_filter_the_evaluations_view_and_the_new_markers():
     source = (ROOT / "src/code_review_agent/app/web/app.js").read_text(encoding="utf-8")
     html = (ROOT / "src/code_review_agent/app/web/index.html").read_text(encoding="utf-8")
-    assert 'id="filter"' in html and 'id="show-evals"' in html
-    for needed in ("/api/groups", "/api/compare", "#evaluations&compare=", "state.filter", "finding.criterion", "contextView", "show ${shown.length - cap} older reviews"):
+    assert 'id="filter"' in html and 'id="show-overview"' in html
+    for needed in ("/api/stats", "comparisonCards", "actionbar", "viewTabs", "/api/groups", "/api/compare", "#evaluations&compare=", "state.filter", "finding.criterion", "contextView", "show ${shown.length - cap} older reviews"):
         assert needed in source, needed
 
 
@@ -526,3 +529,44 @@ def test_the_page_script_is_valid_javascript():
         pytest.skip("node is not installed")
     done = subprocess.run([node, "--check", str(ROOT / "src/code_review_agent/app/web/app.js")], capture_output=True, text=True, timeout=60)
     assert done.returncode == 0, done.stderr
+
+
+# ------------------------------------------------------------------ overview numbers
+
+
+def test_stats_count_runs_findings_and_split_individual_from_evaluation_runs(ui):
+    app, client, _ = ui
+    make_completed_run(app)
+    make_evaluation(app, "eval-a", "a", runs=2)
+    status, everything = client.json("/api/stats")
+    assert status == 200 and everything["scope"] == "all"
+    assert (everything["runs"], everything["individual_runs"], everything["evaluation_runs"]) == (3, 1, 2)
+    _, reviews = client.json("/api/stats?scope=reviews")
+    _, evaluations = client.json("/api/stats?scope=evaluations")
+    assert (reviews["runs"], evaluations["runs"]) == (1, 2)
+    assert reviews["findings"] + evaluations["findings"] == everything["findings"] > 0
+    assert sum(r["n"] for r in everything["by_severity"]) == everything["findings"]
+    assert [r["name"] for r in everything["by_severity"]] == sorted((r["name"] for r in everything["by_severity"]), key=["critical", "high", "medium", "low"].index)
+
+
+def test_stats_include_the_human_decisions_per_group(ui):
+    app, client, _ = ui
+    folder = make_completed_run(app)
+    shown = json.loads((folder / "result.json").read_text(encoding="utf-8"))["findings"]
+    assert shown, "the fixture run must have a finding"
+    decisions = [{"finding_index": 0, "decision": "accepted", "note": ""}]
+    (folder / "triage.json").write_text(json.dumps({"reviewer": "x", "decisions": decisions}), encoding="utf-8")
+    _, data = client.json("/api/stats")
+    assert (data["accepted"], data["triaged"]) == (1, 1)
+    assert sum(r["accepted"] for r in data["by_category"]) == 1
+
+
+def test_stats_refuse_an_unknown_scope_and_cache_finished_runs(ui):
+    app, client, _ = ui
+    folder = make_completed_run(app)
+    status, data = client.json("/api/stats?scope=everything")
+    assert status == 400 and "scope" in data["error"]
+    first = app.run_stats(folder)
+    assert app.run_stats(folder) is first  # unchanged files: same object back
+    (folder / "triage.json").write_text(json.dumps({"reviewer": "x", "decisions": []}), encoding="utf-8")
+    assert app.run_stats(folder) is not first  # a decision was saved: recomputed

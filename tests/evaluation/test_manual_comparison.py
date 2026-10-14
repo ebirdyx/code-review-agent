@@ -18,7 +18,7 @@ from code_review_agent.evaluation.manual import (
     extract_json_object,
 )
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 EXPECTED = ROOT / "evaluation" / "expected"
 CASES = "free-shipping-faulty,free-shipping-fixed"
 
@@ -128,7 +128,7 @@ def test_imported_answers_become_a_scored_evaluation_folder(tmp_path, capsys):
 
 
 def test_a_chat_configuration_sits_next_to_an_open_model_configuration(tmp_path, capsys):
-    from test_comparison import (
+    from tests.evaluation.test_comparison import (
         run_eval,  # the open-model side: the fake model server of the other tests
     )
 
