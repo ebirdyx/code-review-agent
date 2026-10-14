@@ -3,16 +3,16 @@
 from pathlib import Path
 
 import pytest
+from test_evaluation import write_run  # helper that builds a saved run folder
 
-from code_review_agent.cli import main
-from code_review_agent.context import (
+from code_review_agent.app.cli import main
+from code_review_agent.connectors.snapshot import load_example
+from code_review_agent.context.builder import (
     DEFAULT_PROMPT_VERSION,
     available_prompt_versions,
     build_context,
     load_system_prompt,
 )
-from code_review_agent.loading import load_example
-from test_evaluation import write_run  # helper that builds a saved run folder
 
 ROOT = Path(__file__).resolve().parent.parent
 EXAMPLE = ROOT / "examples" / "free-shipping-faulty"
@@ -52,10 +52,15 @@ def test_build_context_cli_does_not_change_default(tmp_path):
 
 def test_revalidate_uses_the_prompt_version_of_the_run(tmp_path):
     # A run made with v2 must still be re-validated (its saved context is the v2 one).
-    from code_review_agent.model_client import ModelSettings
-    from code_review_agent.report import render_markdown
-    from code_review_agent.review import RunRecord, save_result, save_run, sent_text
-    from code_review_agent.validation import finalize_review
+    from code_review_agent.llm.client import ModelSettings
+    from code_review_agent.pipeline.records import (
+        RunRecord,
+        save_result,
+        save_run,
+        sent_text,
+    )
+    from code_review_agent.pipeline.validation import finalize_review
+    from code_review_agent.reporting.report import render_markdown
 
     ticket, review_input = load_example(EXAMPLE)
     ctx = build_context(ticket, review_input, prompt_version="review_v2")
@@ -78,7 +83,11 @@ def test_revalidate_uses_the_prompt_version_of_the_run(tmp_path):
 
 
 def test_v2_and_v3_stay_loadable_and_v2_is_unchanged():
-    from code_review_agent.passes import MULTI_PROMPT_VERSION, available_multi_versions, load_pass_system
+    from code_review_agent.pipeline.passes import (
+        MULTI_PROMPT_VERSION,
+        available_multi_versions,
+        load_pass_system,
+    )
 
     assert MULTI_PROMPT_VERSION == "multi_v4"  # the default is the newest set
     assert {"multi_v1", "multi_v2", "multi_v3", "multi_v4"} <= set(available_multi_versions())
@@ -89,7 +98,7 @@ def test_v2_and_v3_stay_loadable_and_v2_is_unchanged():
 
 
 def test_multi_v3_adds_the_three_guidance_texts_and_keeps_the_rest():
-    from code_review_agent.passes import load_pass_system
+    from code_review_agent.pipeline.passes import load_pass_system
 
     standards = load_pass_system("multi_v3", "standards")
     assert "satisfies the rule in substance" in standards and "TEAM RULES" in standards and '"rules"' in standards
@@ -105,7 +114,7 @@ def test_multi_v3_adds_the_three_guidance_texts_and_keeps_the_rest():
 
 
 def test_multi_v4_describes_the_related_code_block_and_v3_does_not():
-    from code_review_agent.passes import load_pass_system
+    from code_review_agent.pipeline.passes import load_pass_system
 
     for name in ("compliance", "defects", "security", "standards", "verify"):
         v4, v3 = load_pass_system("multi_v4", name), load_pass_system("multi_v3", name)

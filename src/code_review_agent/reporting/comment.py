@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import re
 
+from ..schemas import Finding, ProblemKind, ReviewResult, Severity
 from .report import DISCLAIMER, _fence, _location
-from .schemas import Finding, ProblemKind, ReviewResult, Severity
 
 MARKER = "<!-- code-review-agent -->"
 MAX_COMMENT_CHARS = 60_000  # GitHub's limit is 65,536

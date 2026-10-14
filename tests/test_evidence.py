@@ -10,8 +10,9 @@ from pathlib import Path
 
 import pytest
 
-from code_review_agent import evidence
-from code_review_agent.evidence import (
+from code_review_agent.connectors.snapshot import load_example, save_snapshot
+from code_review_agent.context import evidence
+from code_review_agent.context.evidence import (
     _clean_env,
     _ruff_category,
     _ruff_severity,
@@ -21,7 +22,6 @@ from code_review_agent.evidence import (
     run_static_analysis,
     tool_findings_to_findings,
 )
-from code_review_agent.loading import load_example, save_snapshot
 from code_review_agent.schemas import (
     Category,
     PullRequestMetadata,
@@ -91,7 +91,7 @@ def test_tool_input_files_match_the_diffs_they_accompany():
             if not path.endswith(".py"):
                 continue
             assert path in files, f"{folder.name}: no analysis file for {path}"
-            from code_review_agent.validation import _index_diff
+            from code_review_agent.pipeline.validation import _index_diff
 
             shown, _ = _index_diff(review_input.diff)
             for n in numbers:
@@ -173,7 +173,10 @@ def test_ruff_still_checks_test_files():
 
 
 def test_reportable_findings_are_capped_most_serious_first():
-    from code_review_agent.evidence import MAX_REPORTED_FINDINGS, select_reportable
+    from code_review_agent.context.evidence import (
+        MAX_REPORTED_FINDINGS,
+        select_reportable,
+    )
     from code_review_agent.schemas import ToolFinding
 
     def tf(i, severity):
@@ -382,7 +385,7 @@ def test_profile_of_a_removal_only_change():
 
 
 def test_analysis_files_and_rules_round_trip_through_a_snapshot(tmp_path):
-    from code_review_agent.github import PullRequestSnapshot
+    from code_review_agent.connectors.github import PullRequestSnapshot
 
     snap = PullRequestSnapshot(
         metadata=PullRequestMetadata(title="t", head_sha="a" * 40), diff=add_diff("a.py", 1, ["x = 1"]),
@@ -396,7 +399,7 @@ def test_analysis_files_and_rules_round_trip_through_a_snapshot(tmp_path):
 
 
 def test_snapshot_refuses_analysis_paths_outside_its_folder(tmp_path):
-    from code_review_agent.github import PullRequestSnapshot
+    from code_review_agent.connectors.github import PullRequestSnapshot
 
     snap = PullRequestSnapshot(metadata=PullRequestMetadata(title="t"), diff="d",
                                analysis_files=[SupportingFile(path="../../evil.py", content="x")])

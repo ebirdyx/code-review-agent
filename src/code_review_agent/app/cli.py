@@ -16,8 +16,21 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from .context import DEFAULT_MAX_CHARS, DEFAULT_PROMPT_VERSION, build_context
-from .evaluation import (
+from ..connectors.github import GitHubClient, GitHubError
+from ..connectors.jira import FIELD_ENV, JiraClient, JiraError
+from ..connectors.snapshot import load_example, load_expected
+from ..context.builder import DEFAULT_MAX_CHARS, DEFAULT_PROMPT_VERSION, build_context
+from ..context.evidence import DEFAULT_TOOLS, RUFF_SELECT
+from ..evaluation.comparison import (
+    EvalConfig,
+    EvalRunEntry,
+    auto_label,
+    compare,
+    current_commit,
+    now_iso,
+    save_config,
+)
+from ..evaluation.scoring import (
     EvaluationError,
     LabelFile,
     build_label_template,
@@ -27,25 +40,31 @@ from .evaluation import (
     render_scoreboard,
     score_run,
 )
-from .comment import MARKER, render_pr_comment
-from .comparison import (
-    EvalConfig, EvalRunEntry, auto_label, compare, current_commit, now_iso, save_config,
+from ..events import EventLog, echo_to_stderr
+from ..llm.client import (
+    DEFAULT_HOST,
+    ModelClient,
+    ModelError,
+    ModelSettings,
+    make_client,
 )
-from .events import EventLog, echo_to_stderr
-from .github import GitHubClient, GitHubError
-from .jira import FIELD_ENV, JiraClient, JiraError
-from .loading import load_example, load_expected
-from .evidence import DEFAULT_TOOLS, RUFF_SELECT
-from .assemble import multi_context_text
-from .passes import DEFAULT_PASSES, MULTI_PROMPT_VERSION
+from ..llm.profiles import PROFILE_ENV, ProfileError, load_profiles, resolve_settings
+from ..pipeline.assemble import multi_context_text
+from ..pipeline.passes import DEFAULT_PASSES, MULTI_PROMPT_VERSION
+from ..pipeline.records import RunRecord, save_result, sent_text
+from ..pipeline.validation import finalize_review
+from ..reporting.comment import MARKER, render_pr_comment
+from ..reporting.report import render_markdown
+from ..schemas import (
+    FailureKind,
+    ModelReview,
+    ReviewInput,
+    ReviewResult,
+    Ticket,
+    public_schema,
+)
 from .service import PRFetchOptions, fetch_snapshot, finish_run, review_folder
 from .ui import UIApp, make_server
-from .model_client import DEFAULT_HOST, ModelClient, ModelError, ModelSettings, make_client
-from .profiles import PROFILE_ENV, ProfileError, load_profiles, resolve_settings
-from .report import render_markdown
-from .review import RunRecord, run_review, save_result, save_run, sent_text
-from .schemas import FailureKind, ModelReview, ReviewInput, ReviewResult, Ticket, public_schema
-from .validation import finalize_review
 
 SCHEMAS = {
     "ticket": Ticket,

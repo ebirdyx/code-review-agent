@@ -25,8 +25,7 @@ import time
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path, PurePosixPath
 
-from .context import HUNK_HEADER, split_diff
-from .schemas import (
+from ..schemas import (
     Category,
     ChangeProfile,
     Evidence,
@@ -36,6 +35,7 @@ from .schemas import (
     ToolFinding,
     ToolRun,
 )
+from .builder import HUNK_HEADER, split_diff
 
 DEFAULT_TOOLS = ("ruff", "bandit")
 # Bug-oriented Ruff rule families: pyflakes (F), syntax (E9), bugbear (B), blind except (BLE),

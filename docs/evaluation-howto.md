@@ -66,7 +66,7 @@ uv run review-agent eval-template runs/eval-multi-full-<time>     # suggested la
 # put the file in the run folder as labels.json (or pass --labels FILE to eval-compare)
 ```
 
-The rubric is at the top of `src/code_review_agent/evaluation.py` and was written before any result was seen. A comparison says
+The rubric is at the top of `src/code_review_agent/evaluation/scoring.py` and was written before any result was seen. A comparison says
 "PROVISIONAL" until every configuration has a labels file with a reviewer's name.
 
 ## 5. After changing the validator

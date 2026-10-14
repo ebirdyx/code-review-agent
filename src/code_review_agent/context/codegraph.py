@@ -22,7 +22,7 @@ import builtins
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 
-from .schemas import RelatedSnippet
+from ..schemas import RelatedSnippet
 
 MAX_SYMBOLS = 8  # changed functions we look around (the ones with most added lines first)
 MAX_PER_KIND = 3  # callers, callees and tests kept per changed function

@@ -7,7 +7,14 @@ import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 
-from .schemas import ExpectedReview, PullRequestMetadata, RelatedSnippet, ReviewInput, SupportingFile, Ticket
+from ..schemas import (
+    ExpectedReview,
+    PullRequestMetadata,
+    RelatedSnippet,
+    ReviewInput,
+    SupportingFile,
+    Ticket,
+)
 
 
 def load_example(folder: Path) -> tuple[Ticket | None, ReviewInput]:

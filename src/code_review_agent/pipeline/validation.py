@@ -21,10 +21,9 @@ from typing import get_args, get_origin
 
 from pydantic import BaseModel, ValidationError
 
-from .context import HUNK_HEADER, render_ticket, split_diff
-from .evidence import compute_profile
-from .review import RunRecord
-from .schemas import (
+from ..context.builder import HUNK_HEADER, render_ticket, split_diff
+from ..context.evidence import compute_profile
+from ..schemas import (
     WHOLE_CHANGE,
     Coverage,
     FailureKind,
@@ -38,6 +37,7 @@ from .schemas import (
     Ticket,
     ValidationProblem,
 )
+from .records import RunRecord
 
 
 class InvalidOutput(Exception):
@@ -314,7 +314,9 @@ def finalize_review(
 ) -> ReviewResult:
     """Build the final ReviewResult from one run record."""
     if record.pipeline == "multi":
-        from .assemble import assemble_multi  # imported here: assemble builds on this module
+        from .assemble import (
+            assemble_multi,  # imported here: assemble builds on this module
+        )
 
         return assemble_multi(record, ticket, review_input)
     run = RunSummary(

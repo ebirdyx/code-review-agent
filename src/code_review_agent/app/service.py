@@ -11,19 +11,20 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .context import DEFAULT_PROMPT_VERSION
-from .events import EventLog
-from .evidence import DEFAULT_TOOLS, RUFF_SELECT
-from .github import GitHubClient, PullRequestSnapshot, parse_pr_reference
-from .jira import PROJECTS_ENV, JiraClient, resolve_ticket
-from .loading import load_example, save_snapshot
-from .model_client import ModelClient
-from .passes import MULTI_PROMPT_VERSION
-from .pipeline import run_multi
-from .report import render_markdown
-from .review import RunRecord, new_run_folder, run_review, save_result, save_run
-from .schemas import ReviewInput, ReviewResult, Ticket
-from .validation import finalize_review
+from ..connectors.github import GitHubClient, PullRequestSnapshot, parse_pr_reference
+from ..connectors.jira import PROJECTS_ENV, JiraClient, resolve_ticket
+from ..connectors.snapshot import load_example, save_snapshot
+from ..context.builder import DEFAULT_PROMPT_VERSION
+from ..context.evidence import DEFAULT_TOOLS, RUFF_SELECT
+from ..events import EventLog
+from ..llm.client import ModelClient
+from ..pipeline.multi import run_multi
+from ..pipeline.passes import MULTI_PROMPT_VERSION
+from ..pipeline.records import RunRecord, new_run_folder, save_result, save_run
+from ..pipeline.single import run_review
+from ..pipeline.validation import finalize_review
+from ..reporting.report import render_markdown
+from ..schemas import ReviewInput, ReviewResult, Ticket
 
 
 @dataclass

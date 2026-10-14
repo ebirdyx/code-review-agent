@@ -11,15 +11,19 @@ from pathlib import Path
 import httpx
 import pytest
 
-from code_review_agent import cli
-from code_review_agent.context import build_context, split_diff
-from code_review_agent.github import GitHubClient, GitHubError, parse_pr_reference
-from code_review_agent.loading import load_example, save_snapshot
-from code_review_agent.model_client import ModelSettings
-from code_review_agent.report import render_markdown
-from code_review_agent.review import run_review
+from code_review_agent.app import cli
+from code_review_agent.connectors.github import (
+    GitHubClient,
+    GitHubError,
+    parse_pr_reference,
+)
+from code_review_agent.connectors.snapshot import load_example, save_snapshot
+from code_review_agent.context.builder import build_context, split_diff
+from code_review_agent.llm.client import ModelSettings
+from code_review_agent.pipeline.single import run_review
+from code_review_agent.pipeline.validation import _index_diff, finalize_review
+from code_review_agent.reporting.report import render_markdown
 from code_review_agent.schemas import SupportingFile
-from code_review_agent.validation import _index_diff, finalize_review
 
 HEAD = "a" * 40
 BASE = "b" * 40
@@ -309,7 +313,7 @@ class _Recorder:
     settings = ModelSettings(model="fake")
 
     def complete(self, system, user):
-        from code_review_agent.model_client import ModelResponse
+        from code_review_agent.llm.client import ModelResponse
         return ModelResponse('{"findings": [], "limitations": []}', 1.0, 10, 5, "stop")
 
 

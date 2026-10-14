@@ -13,23 +13,22 @@ from pathlib import Path
 
 import pytest
 
-from code_review_agent.cli import main
+from code_review_agent.app.cli import main
+from code_review_agent.app.service import review_folder
+from code_review_agent.connectors.snapshot import load_example
 from code_review_agent.events import EventLog
-from code_review_agent.loading import load_example
-from code_review_agent.model_client import ModelError, ModelResponse, ModelSettings
-from code_review_agent.assemble import assemble_multi, multi_context_text
-from code_review_agent.merge import merge_candidates
-from code_review_agent.passes import MULTI_PROMPT_VERSION, load_pass_system, render_candidates
-from code_review_agent.pipeline import run_multi
-from code_review_agent.review import save_run
-from code_review_agent.schemas import (
-    WHOLE_CHANGE,
-    FailureKind,
-    Finding,
-    ProblemKind,
+from code_review_agent.llm.client import ModelError, ModelResponse, ModelSettings
+from code_review_agent.pipeline.assemble import assemble_multi, multi_context_text
+from code_review_agent.pipeline.merge import merge_candidates
+from code_review_agent.pipeline.multi import run_multi
+from code_review_agent.pipeline.passes import (
+    MULTI_PROMPT_VERSION,
+    load_pass_system,
+    render_candidates,
 )
-from code_review_agent.service import review_folder
-from code_review_agent.validation import finalize_review
+from code_review_agent.pipeline.records import save_run
+from code_review_agent.pipeline.validation import finalize_review
+from code_review_agent.schemas import WHOLE_CHANGE, FailureKind, Finding, ProblemKind
 
 ROOT = Path(__file__).resolve().parent.parent
 EXAMPLES = ROOT / "examples"
@@ -468,7 +467,7 @@ def check(number=1, verdict="met", file=None, line=None, quote=None):
 
 
 def test_a_met_criterion_that_cites_code_a_finding_calls_wrong_is_flagged_not_changed():
-    from code_review_agent.consistency import check_consistency
+    from code_review_agent.pipeline.consistency import check_consistency
 
     criteria = [check(1, file="a.py", line=5)]
     problems = check_consistency(criteria, [mk("boundary_condition", "high", file="a.py", line=5, title="Off by one")])
@@ -478,7 +477,7 @@ def test_a_met_criterion_that_cites_code_a_finding_calls_wrong_is_flagged_not_ch
 
 def test_the_same_quoted_code_is_enough_even_without_a_location():
     """Seen with Qwen2.5-Coder: the criterion was marked met with no line, but quoted the line the finding blames."""
-    from code_review_agent.consistency import check_consistency
+    from code_review_agent.pipeline.consistency import check_consistency
 
     criteria = [check(1, quote="if total >   100:")]
     findings = [mk("boundary_condition", "high", line=6, quote="if total > 100:")]
@@ -486,7 +485,7 @@ def test_the_same_quoted_code_is_enough_even_without_a_location():
 
 
 def test_security_style_and_distant_findings_do_not_contradict_a_met_criterion():
-    from code_review_agent.consistency import check_consistency
+    from code_review_agent.pipeline.consistency import check_consistency
 
     criteria = [check(1, file="a.py", line=5, quote="x")]
     assert check_consistency(criteria, [mk("security", file="a.py", line=5, quote="x")]) == []
@@ -496,7 +495,7 @@ def test_security_style_and_distant_findings_do_not_contradict_a_met_criterion()
 
 
 def test_only_met_criteria_are_checked():
-    from code_review_agent.consistency import check_consistency
+    from code_review_agent.pipeline.consistency import check_consistency
 
     criteria = [check(1, verdict="not_met", file="a.py", line=5), check(2, verdict="cannot_determine", file="a.py", line=5)]
     assert check_consistency(criteria, [mk("logic_defect", file="a.py", line=5)]) == []
@@ -662,7 +661,7 @@ def test_single_pass_pipeline_is_still_available_and_unchanged(tmp_path):
 
 
 def test_report_shows_pipeline_passes_checklist_and_verification():
-    from code_review_agent.report import render_markdown
+    from code_review_agent.reporting.report import render_markdown
 
     _, _, result, _, _, _ = run()
     text = render_markdown(result)
@@ -677,7 +676,7 @@ def test_report_shows_pipeline_passes_checklist_and_verification():
 
 
 def test_report_lists_dismissed_findings_with_the_verifiers_reason():
-    from code_review_agent.report import render_markdown
+    from code_review_agent.reporting.report import render_markdown
 
     dismiss = j(verdicts=[{"index": 1, "verdict": "unsupported", "reason": "Assumes an unstated rule."}])
     text = render_markdown(run({"verify": dismiss})[2])
@@ -686,7 +685,7 @@ def test_report_lists_dismissed_findings_with_the_verifiers_reason():
 
 
 def test_report_shows_failed_passes_and_flags_unverified_findings():
-    from code_review_agent.report import render_markdown
+    from code_review_agent.reporting.report import render_markdown
 
     text = render_markdown(run({"security": "garbage", "verify": j(verdicts=[])})[2])
     assert "| security | failed |" in text and "not valid JSON" in text
@@ -695,7 +694,7 @@ def test_report_shows_failed_passes_and_flags_unverified_findings():
 
 
 def test_report_shows_checklist_problems_under_their_criterion():
-    from code_review_agent.report import render_markdown
+    from code_review_agent.reporting.report import render_markdown
 
     only_one = j(criteria=[verdict(1, "met", "trust me")])  # no evidence, and criterion 2 missing
     text = render_markdown(run({"compliance": only_one})[2])
@@ -705,7 +704,7 @@ def test_report_shows_checklist_problems_under_their_criterion():
 
 
 def test_single_pass_report_has_no_checklist_or_pass_table():
-    from code_review_agent.report import render_markdown
+    from code_review_agent.reporting.report import render_markdown
     from code_review_agent.schemas import ReviewResult
 
     text = render_markdown(ReviewResult(status="completed"))

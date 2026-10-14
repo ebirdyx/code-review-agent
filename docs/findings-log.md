@@ -98,7 +98,7 @@ Six pull requests with an answer key written beforehand: four planted defects, o
 
 ## 9. Repository context and the three-configuration comparison (details in `evaluation/results/context-ablation/README.md`)
 
-- Added a lightweight code graph (`codegraph.py`): for each changed Python function, its callers, callees, tests and class constructor, found
+- Added a lightweight code graph (`context/codegraph.py`): for each changed Python function, its callers, callees, tests and class constructor, found
   with `ast`, from one repository download (2 requests), saved with the snapshot, shown to every pass and the verifier.
 - Comparison on the six demo PRs, one run each: LLM only, + Ruff/Bandit, + repository context. **All three found all four planted
   defects and got the same checklists right**: the planted defects are visible in the diff, so the extra layers had nothing to add (ceiling effect).

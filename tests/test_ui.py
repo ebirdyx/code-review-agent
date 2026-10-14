@@ -15,10 +15,10 @@ import urllib.request
 from pathlib import Path
 
 import pytest
-
-from code_review_agent.events import EventLog
-from code_review_agent.ui import UIApp, make_server
 from test_evaluation import write_run
+
+from code_review_agent.app.ui import UIApp, make_server
+from code_review_agent.events import EventLog
 
 ROOT = Path(__file__).resolve().parent.parent
 FAULTY = (ROOT / "tests/fixtures/raw/real-gpt-oss-faulty.json").read_text(encoding="utf-8")
@@ -96,8 +96,8 @@ def test_index_and_static_files_are_served_with_a_strict_csp(ui):
 
 
 def test_page_scripts_never_use_dangerous_apis():
-    source = (ROOT / "src/code_review_agent/web/app.js").read_text(encoding="utf-8")
-    html = (ROOT / "src/code_review_agent/web/index.html").read_text(encoding="utf-8")
+    source = (ROOT / "src/code_review_agent/app/web/app.js").read_text(encoding="utf-8")
+    html = (ROOT / "src/code_review_agent/app/web/index.html").read_text(encoding="utf-8")
     for forbidden in ("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(", "new Function"):
         assert forbidden not in source, forbidden
     assert "<script>" not in html and "onclick=" not in html  # no inline scripts or handlers
@@ -325,7 +325,7 @@ def test_too_many_concurrent_reviews_are_refused(ui):
 
 def test_parallel_runs_of_the_same_case_never_collide_on_a_folder(tmp_path):
     # Regression: check-then-create let two threads pick the same name in the same second.
-    from code_review_agent.review import new_run_folder
+    from code_review_agent.pipeline.records import new_run_folder
 
     made, errors = [], []
 
@@ -367,7 +367,7 @@ def test_printing_a_report_with_unusual_characters_never_crashes_the_command(tmp
     import sys
 
     code = (
-        "from code_review_agent.cli import _make_output_safe; _make_output_safe(); "
+        "from code_review_agent.app.cli import _make_output_safe; _make_output_safe(); "
         "print('free\u2011shipping caf\u00e9')"
     )
     done = subprocess.run([sys.executable, "-c", code], capture_output=True, env={**__import__('os').environ, "PYTHONIOENCODING": "cp1252"})

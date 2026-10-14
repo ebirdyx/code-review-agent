@@ -9,13 +9,7 @@ from __future__ import annotations
 
 import re
 
-from .schemas import (
-    WHOLE_CHANGE,
-    Category,
-    Evidence,
-    Finding,
-    Severity,
-)
+from ..schemas import WHOLE_CHANGE, Category, Evidence, Finding, Severity
 from .textutil import short
 
 _SEVERITY_RANK = {Severity.CRITICAL: 0, Severity.HIGH: 1, Severity.MEDIUM: 2, Severity.LOW: 3}

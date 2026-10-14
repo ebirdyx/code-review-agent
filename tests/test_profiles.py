@@ -12,15 +12,15 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
-from code_review_agent.cli import main
-from code_review_agent.model_client import (
+from code_review_agent.app.cli import main
+from code_review_agent.llm.client import (
     ModelError,
     ModelSettings,
     OllamaClient,
     OpenAICompatibleClient,
     make_client,
 )
-from code_review_agent.profiles import ProfileError, load_profiles, resolve_settings
+from code_review_agent.llm.profiles import ProfileError, load_profiles, resolve_settings
 from code_review_agent.schemas import FailureKind
 
 
@@ -97,7 +97,7 @@ def test_builtin_profiles_are_valid_documented_and_include_the_team_model():
 
 
 def test_profiles_contain_no_secrets():
-    text = open(__import__("importlib").resources.files("code_review_agent").joinpath("models.toml"), encoding="utf-8").read()
+    text = open(__import__("importlib").resources.files("code_review_agent.llm").joinpath("models.toml"), encoding="utf-8").read()
     for marker in ("sk-", "api_key =", "token =", "Bearer"):
         assert marker not in text
 

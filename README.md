@@ -34,46 +34,54 @@ modèle de langage **à poids ouverts** via Ollama, puis produit des constats st
 
 ## Architecture et responsabilités
 
+Le code (`src/code_review_agent/`) est organisé en couches. Chaque dossier a **une seule responsabilité** et les dépendances vont toujours dans le même
+sens : `app` utilise tout ; `evaluation` utilise `connectors` et `pipeline` ; `pipeline` utilise `context` et `llm` ; `connectors` utilise `context` ;
+`llm`, `context` et `reporting` n'utilisent que les contrats partagés (`schemas.py`). Aucune dépendance circulaire (vérifié sur les vrais imports).
+
 ```
-ticket.json  pr.json  change.diff  supporting/        (ou une PR GitHub téléchargée)
-        \        |        |          /
-         v       v        v         v
-   loading.py / github.py     lecture des entrées, instantané d'une PR
-              |
-         context.py           assemble le message : instructions (de confiance) + contenu non fiable
-              |
-       model_client.py        seul module qui parle au modèle (Ollama via LangChain)
-              |
-         review.py            exécute un appel, enregistre tout dans run.json
-              |
-       validation.py          JSON, schéma, fichier/ligne/citations, doublons -> ReviewResult
-              |
-          report.py           rapport Markdown lisible
+ticket Jira / PR GitHub / dossier local
+        |
+  connectors/    lire les entrées (lecture seule) -> instantané enregistré sur disque
+        |
+  context/       préparer ce que le modèle verra : contexte, graphe de code, analyse statique
+        |
+  pipeline/      passes spécialisées -> fusion -> vérificateur -> validation -> résultat    <--  llm/ (clients et profils de modèles)
+        |
+  reporting/     rapport Markdown, commentaire de PR
+
+  app/           ligne de commande, service partagé, interface web locale
+  evaluation/    mesurer l'agent : notation et comparaison de configurations
 ```
 
-| Module | Rôle |
-|---|---|
-| `schemas.py` | Contrats de données (Pydantic) : ticket, entrée, constat, résultat. |
-| `context.py` | Construit le contexte. Les instructions (`prompts/review_vN.md`) sont séparées du contenu non fiable, encadré de marqueurs. Le diff reçoit des numéros de ligne. Ce qui manque ou ne tient pas dans le budget est **signalé**, jamais tronqué en silence. |
-| `model_client.py` | Deux clients derrière la même interface : Ollama et API compatible OpenAI (via LangChain). Adresse, modèle, délai, température, graine configurables. Erreurs classées (connexion, délai, clé, quota, crédit, modèle introuvable). |
-| `profiles.py`, `models.toml` | Profils de modèles nommés et documentés (aucun secret). |
-| `pipeline.py` | Exécution du pipeline multi-passes : analyse statique, appels aux spécialistes (en parallèle), vérificateur. C'est le **seul** module du pipeline qui appelle le modèle. |
-| `passes.py` | Les passes qui existent, le schéma JSON de chacune, les prompts (`prompts/multi_vN/`) et la liste numérotée montrée au vérificateur. |
-| `blocks.py` | Ce que le modèle voit en plus du ticket et du diff : pistes d'analyse statique, règles d'équipe, code lié (blocs partagés), message du vérificateur. |
-| `merge.py` | Fusion des signalements d'un même problème en un seul constat (sans perdre ni preuve ni explication). |
-| `consistency.py` | Contrôle de cohérence : un critère « respecté » alors qu'un constat dit que le code cité est faux est signalé (jamais corrigé). |
-| `assemble.py` | Fonction **pure** : transforme une exécution enregistrée en `ReviewResult` (analyse des réponses, fusion, vérification, ancrage, cohérence) et reconstruit le texte exact envoyé (`context.txt`). Aucun appel au modèle. |
-| `codegraph.py` | Graphe de code léger (`ast`) : appelants, fonctions appelées, tests et classe des fonctions modifiées. |
-| `comparison.py` | Évaluation reproductible : configuration enregistrée par `eval-run`, comparaison côte à côte par `eval-compare`. |
-| `textutil.py` | Petit utilitaire de texte partagé. |
-| `evidence.py` | Analyse statique (Ruff, Bandit) en bac à sable, correspondance avec les lignes modifiées, profil du changement. |
-| `service.py`, `events.py` | Le flux de travail partagé par la ligne de commande et l'interface web, et les événements de progression. |
-| `ui.py`, `web/` | Interface web locale. |
-| `review.py` | Un appel au modèle. Conserve la réponse brute, le modèle, la version du prompt, les réglages, la révision revue. |
-| `validation.py` | Rejette un JSON invalide ou hors schéma. Vérifie que fichier, ligne et citations existent dans l'entrée. **Ne corrige jamais une localisation** : elle est signalée. |
-| `report.py` | Rapport Markdown. Un échec de revue n'est jamais présenté comme « aucun constat ». |
-| `github.py` | Lecture seule d'une PR : pagination, patchs absents, PR trop grande, vérification que la PR n'a pas changé pendant la lecture. |
-| `evaluation.py` | Étiquetage humain, précision, rappel, F1, exactitude de la ligne et de la catégorie. |
+| Dossier | Fichier | Rôle |
+|---|---|---|
+| (racine) | `schemas.py` | Contrats de données (Pydantic) : ticket, entrée, constat, résultat. |
+| | `events.py` | Événements de progression (terminal, `events.jsonl`, interface web). |
+| `connectors/` | `github.py` | Lecture seule d'une PR : pagination, patchs absents, PR trop grande, vérification que la PR n'a pas changé pendant la lecture, téléchargement du dépôt en une archive. |
+| | `jira.py` | Lecture seule d'un ticket Jira : critères d'acceptation, lien PR vers ticket, erreurs expliquées. |
+| | `snapshot.py` | Lit et écrit les dossiers d'exemple et les instantanés de PR (rejouables hors ligne). |
+| `context/` | `builder.py` | Construit le contexte. Les instructions (`prompts/`) sont séparées du contenu non fiable, encadré de marqueurs. Le diff reçoit des numéros de ligne. Ce qui manque ou ne tient pas dans le budget est **signalé**, jamais tronqué en silence. |
+| | `codegraph.py` | Graphe de code léger (`ast`) : appelants, fonctions appelées, tests et classe des fonctions modifiées. |
+| | `evidence.py` | Analyse statique (Ruff, Bandit) en bac à sable, correspondance avec les lignes modifiées, profil du changement. |
+| `llm/` | `client.py` | Deux clients derrière la même interface : Ollama et API compatible OpenAI (via LangChain). Erreurs classées (connexion, délai, clé, quota, crédit, modèle introuvable). |
+| | `profiles.py`, `models.toml` | Profils de modèles nommés et documentés (aucun secret). |
+| `pipeline/` | `multi.py` | Exécution du pipeline multi-passes : analyse statique, appels aux spécialistes (en parallèle), vérificateur. |
+| | `single.py` | Pipeline à un seul appel (la référence de comparaison, `--pipeline single`). |
+| | `records.py` | Ce qu'une exécution a enregistré (contexte envoyé, réponses brutes, réglages, révision revue) et son enregistrement dans `run.json`. |
+| | `passes.py` | Les passes qui existent, le schéma JSON de chacune, les prompts (`prompts/multi_vN/`). |
+| | `blocks.py` | Ce que le modèle voit en plus du ticket et du diff : pistes d'analyse statique, règles d'équipe, code lié, message du vérificateur. |
+| | `merge.py` | Fusion des signalements d'un même problème en un seul constat (sans perdre ni preuve ni explication). |
+| | `consistency.py` | Contrôle de cohérence : un critère « respecté » alors qu'un constat dit que le code cité est faux est signalé (jamais corrigé). |
+| | `assemble.py` | Fonction **pure** : transforme une exécution enregistrée en `ReviewResult` et reconstruit le texte exact envoyé (`context.txt`). Aucun appel au modèle. |
+| | `validation.py` | Rejette un JSON invalide ou hors schéma. Vérifie que fichier, ligne et citations existent dans l'entrée. **Ne corrige jamais une localisation** : elle est signalée. |
+| | `textutil.py` | Petit utilitaire de texte partagé. |
+| `reporting/` | `report.py` | Rapport Markdown. Un échec de revue n'est jamais présenté comme « aucun constat ». |
+| | `comment.py` | Commentaire unique de PR, avec le texte du modèle neutralisé (mentions, HTML, liens). |
+| `evaluation/` | `scoring.py` | Étiquetage humain, précision, rappel, F1, exactitude de la ligne et de la catégorie. |
+| | `comparison.py` | Évaluation reproductible : configuration enregistrée par `eval-run`, comparaison côte à côte par `eval-compare`. |
+| `app/` | `cli.py` | Les commandes `review-agent` (aussi `python -m code_review_agent`). |
+| | `service.py` | Le flux de travail partagé par la ligne de commande et l'interface web. |
+| | `ui.py`, `web/` | Interface web locale. |
 
 ### Pipeline multi-passes
 
@@ -118,7 +126,7 @@ Sans règles, la passe est ignorée et le rapport le dit.
 **Profil du changement.** Sans modèle : fichiers, lignes, types, « du code source a changé mais aucun test », zones sensibles (auth, paiement, migrations…), dépendances, CI, taille.
 
 **Contexte du dépôt (graphe de code léger).** Le diff montre ce qui change, pas comment le code est utilisé. Pour chaque fonction Python
-modifiée, `codegraph.py` retrouve (avec le module standard `ast`, sans base vectorielle) : les fonctions qui l'appellent, celles qu'elle appelle,
+modifiée, `context/codegraph.py` retrouve (avec le module standard `ast`, sans base vectorielle) : les fonctions qui l'appellent, celles qu'elle appelle,
 les tests qui la mentionnent et le `__init__` de sa classe, plus des faits simples (« mentionnée dans aucun test »). Le dépôt est téléchargé en
 **une seule archive** (2 requêtes, la limite de 60 requêtes par heure n'est donc pas consommée par fichier), lue en mémoire ; le jeton n'est jamais
 envoyé au serveur de téléchargement. Le résultat est enregistré avec la capture de la PR (`related.json`), de sorte qu'une revue rejouée est identique.
@@ -303,7 +311,7 @@ publie **un seul commentaire**, mis à jour à chaque push (repéré par un marq
   Chaque défaut attendu a une ligne calculée à partir d'un extrait de code (`code_anchor`), vérifiée par test.
 - **Séparation** : `evaluation/split.json`. *dev* (9 cas) sert à améliorer le prompt ; *heldout* (13 cas) ne se lance
   qu'une fois le prompt figé (`--confirm-frozen`).
-- **Étiquettes** (grille écrite avant les résultats, voir `evaluation.py`) : `tp`, `fp`, `duplicate` (compté une fois), `extra`
+- **Étiquettes** (grille écrite avant les résultats, voir `evaluation/scoring.py`) : `tp`, `fp`, `duplicate` (compté une fois), `extra`
   (observation plausible hors réponses attendues, non comptée dans la précision). Une catégorie différente reste un `tp`.
   Une réserve hypothétique sur une règle non spécifiée (« si l'entreprise voulait… ») est un `fp`.
 - **Mesures** : TP/FP/FN, précision, rappel, F1, exactitude de la ligne et de la catégorie, utilité (0 à 2), durée, jetons.
@@ -373,7 +381,7 @@ Documents utiles : `docs/evaluation-howto.md` (comment évaluer et comparer des 
 
 À faire, dans l'ordre :
 
-1. Lire ce fichier, puis `src/code_review_agent/schemas.py` (contrats) et `evaluation.py` (grille d'étiquetage).
+1. Lire ce fichier, puis `src/code_review_agent/schemas.py` (contrats) et `evaluation/scoring.py` (grille d'étiquetage).
 2. Valider les réponses attendues et les étiquettes (`reviewed_by`).
 3. Mesurer le pipeline multi-passes contre le pipeline simple (`--pipeline single`) et la vérification (`--no-verify`) sur le
    banc d'essai ; exécuter le *held-out* une seule fois, prompt figé (`--confirm-frozen`).
@@ -387,6 +395,7 @@ Documents utiles : `docs/evaluation-howto.md` (comment évaluer et comparer des 
 Pièges rencontrés : une variable d'environnement modifiée n'est vue que par un **nouveau** terminal ; une faute de frappe
 dans `JIRA_BASE_URL` donne une erreur de certificat (la commande `doctor` l'explique) ; un serveur `review-agent ui`
 ouvert verrouille `review-agent.exe` sous Windows (`uv sync` échoue tant qu'il tourne).
+Si le point d'entrée change (déplacement de `cli.py`), arrêter l'interface puis relancer `uv sync` ; en attendant, `python -m code_review_agent` fonctionne toujours.
 
 Un cas ajouté au banc d'essai : créer `evaluation/cases/<id>/` (`ticket.json`, `pr.json`, `change.diff`) et
 `evaluation/expected/<id>.json`, l'ajouter à `evaluation/split.json`, puis `uv run pytest`.

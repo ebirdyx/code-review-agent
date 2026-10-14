@@ -7,23 +7,24 @@ Ruff and Bandit; only the tool-failure tests patch them. GitHub is the fake tran
 import json
 from pathlib import Path
 
-import pytest
-
-from code_review_agent import cli, evidence
-from code_review_agent.events import EventLog
-from code_review_agent.github import GitHubClient
-from code_review_agent.loading import load_example
-from code_review_agent.model_client import ModelError
-from code_review_agent.assemble import multi_context_text
-from code_review_agent.passes import load_pass_system
-from code_review_agent.pipeline import run_multi
-from code_review_agent.report import render_markdown
-from code_review_agent.schemas import FailureKind, ModelReview, public_schema
-from code_review_agent.service import review_folder
-from code_review_agent.validation import finalize_review
-from test_github import BASE, FakeGitHub, client as gh_client, file_json
-from test_pipeline import FULL, ScriptedClient, j, verdict
+from test_github import BASE, FakeGitHub, file_json
+from test_github import client as gh_client
+from test_pipeline import ScriptedClient, j, verdict
 from test_pipeline import finding as model_finding
+
+from code_review_agent.app import cli
+from code_review_agent.app.service import review_folder
+from code_review_agent.connectors.github import GitHubClient
+from code_review_agent.connectors.snapshot import load_example
+from code_review_agent.context import evidence
+from code_review_agent.events import EventLog
+from code_review_agent.llm.client import ModelError
+from code_review_agent.pipeline.assemble import multi_context_text
+from code_review_agent.pipeline.multi import run_multi
+from code_review_agent.pipeline.passes import load_pass_system
+from code_review_agent.pipeline.validation import finalize_review
+from code_review_agent.reporting.report import render_markdown
+from code_review_agent.schemas import FailureKind, ModelReview, public_schema
 
 ROOT = Path(__file__).resolve().parent.parent
 CASES = ROOT / "evaluation" / "cases"
@@ -114,7 +115,7 @@ def test_a_failed_tool_is_visible_and_the_model_passes_still_count(monkeypatch):
 
 def test_the_review_says_so_when_the_cap_left_tool_warnings_out(monkeypatch):
     monkeypatch.setattr(evidence, "MAX_REPORTED_FINDINGS", 2)
-    import code_review_agent.assemble as assemble  # the cap is applied where the candidates are prepared
+    import code_review_agent.pipeline.assemble as assemble
 
     monkeypatch.setattr(assemble, "MAX_REPORTED_FINDINGS", 2)
     blind = "".join(f"def f{i}():\n    try:\n        pass\n    except Exception:\n        pass\n\n" for i in range(4))
@@ -228,8 +229,8 @@ def test_an_invented_rule_quote_is_flagged():
 
 
 def test_quoting_rules_when_there_are_none_is_flagged():
+    from code_review_agent.pipeline.validation import check_grounding
     from code_review_agent.schemas import Finding
-    from code_review_agent.validation import check_grounding
 
     _, review_input = load_example(CASES / "user-search-sql")
     f = Finding.model_validate(model_finding("maintainability", "low", "users/search.py", 8, "t", "e",
@@ -242,7 +243,7 @@ def test_only_the_standards_pass_may_cite_rules_in_its_schema_and_the_single_pas
     for name in ("compliance", "defects", "security", "verify"):
         assert '"rules"' not in load_pass_system("multi_v2", name), name
     assert '"rules"' in load_pass_system("multi_v2", "standards") and "TEAM RULES" in load_pass_system("multi_v2", "standards")
-    from code_review_agent.context import load_system_prompt
+    from code_review_agent.context.builder import load_system_prompt
 
     single = load_system_prompt()
     assert '"rules"' not in single and "found_by" not in single and "STATIC ANALYSIS" not in single
@@ -272,7 +273,7 @@ def test_empty_or_blank_rules_count_as_no_rules():
 
 
 def test_change_profile_is_in_both_pipelines_results(tmp_path):
-    from code_review_agent.model_client import ModelResponse, ModelSettings
+    from code_review_agent.llm.client import ModelResponse, ModelSettings
 
     class Single:
         settings = ModelSettings(model="single-fake")
@@ -404,7 +405,7 @@ def test_analysis_can_be_switched_off_and_then_nothing_extra_is_downloaded():
 
 
 def test_a_file_too_large_even_for_the_tools_is_explained(monkeypatch):
-    import code_review_agent.github as gh
+    import code_review_agent.connectors.github as gh
 
     monkeypatch.setattr(gh, "MAX_ANALYSIS_CHARS", 100)
     snap = fetch(FakeGitHub(files=[file_json("big.py")], contents={"big.py": BIG}))
@@ -434,7 +435,7 @@ def test_no_rules_file_is_normal_and_silent():
 
 
 def test_oversized_rules_are_refused_with_an_explanation(monkeypatch):
-    import code_review_agent.github as gh
+    import code_review_agent.connectors.github as gh
 
     monkeypatch.setattr(gh, "MAX_RULES_CHARS", 10)
     snap = fetch(FakeGitHub(rules={".review-agent/rules.md": RULES}))

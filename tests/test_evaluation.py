@@ -8,10 +8,12 @@ import json
 from pathlib import Path
 
 import pytest
+from test_model_client import FakeOllama
 
-from code_review_agent.cli import main
-from code_review_agent.context import build_context
-from code_review_agent.evaluation import (
+from code_review_agent.app.cli import main
+from code_review_agent.connectors.snapshot import load_example, load_expected
+from code_review_agent.context.builder import build_context
+from code_review_agent.evaluation.scoring import (
     EvaluationError,
     FindingLabel,
     LabelFile,
@@ -25,9 +27,14 @@ from code_review_agent.evaluation import (
     suggest_labels,
     totals,
 )
-from code_review_agent.loading import load_example, load_expected
-from code_review_agent.model_client import ModelSettings
-from code_review_agent.review import RunRecord, save_result, save_run, sent_text
+from code_review_agent.llm.client import ModelSettings
+from code_review_agent.pipeline.records import (
+    RunRecord,
+    save_result,
+    save_run,
+    sent_text,
+)
+from code_review_agent.pipeline.validation import _index_diff
 from code_review_agent.schemas import (
     Coverage,
     ExpectedFinding,
@@ -39,8 +46,6 @@ from code_review_agent.schemas import (
     ReviewResult,
     ValidationProblem,
 )
-from code_review_agent.validation import _index_diff
-from test_model_client import FakeOllama
 
 ROOT = Path(__file__).resolve().parent.parent
 CASES = ROOT / "evaluation" / "cases"
@@ -303,8 +308,8 @@ def write_run(runs_dir: Path, model="gpt-test", case_id="free-shipping-faulty", 
         case_id=case_id, created_at="2026-10-05T00:00:00+00:00", prompt_version="review_v1",
         settings=ModelSettings(model=model), max_chars=30000, coverage=ctx.coverage, raw_response=raw,
     )
-    from code_review_agent.report import render_markdown
-    from code_review_agent.validation import finalize_review
+    from code_review_agent.pipeline.validation import finalize_review
+    from code_review_agent.reporting.report import render_markdown
 
     folder = save_run(record, sent_text(ctx.system, ctx.user), runs_dir)
     result = finalize_review(record, ticket, review_input)

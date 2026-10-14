@@ -5,11 +5,22 @@ import json
 import httpx
 import pytest
 
-from code_review_agent import cli
-from code_review_agent.comment import MARKER, MAX_COMMENT_CHARS, render_pr_comment
-from code_review_agent.github import GitHubClient, GitHubError
+from code_review_agent.app import cli
+from code_review_agent.connectors.github import GitHubClient, GitHubError
+from code_review_agent.reporting.comment import (
+    MARKER,
+    MAX_COMMENT_CHARS,
+    render_pr_comment,
+)
 from code_review_agent.schemas import (
-    CriterionCheck, Evidence, Finding, PassSummary, ReviewFailure, ReviewResult, ReviewedRevision, RunSummary,
+    CriterionCheck,
+    Evidence,
+    Finding,
+    PassSummary,
+    ReviewedRevision,
+    ReviewFailure,
+    ReviewResult,
+    RunSummary,
 )
 
 

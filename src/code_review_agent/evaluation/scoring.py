@@ -29,9 +29,9 @@ from typing import Self
 
 from pydantic import Field, ValidationError, model_validator
 
-from .loading import load_expected
-from .review import RunRecord
-from .schemas import ExpectedReview, ReviewResult, StrictModel
+from ..connectors.snapshot import load_expected
+from ..pipeline.records import RunRecord
+from ..schemas import ExpectedReview, ReviewResult, StrictModel
 
 NEAR_LINES = 2  # "near" location tolerance for the location-accuracy metric
 

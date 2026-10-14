@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-from .schemas import Finding, ReviewResult, Severity, TriageFile, ValidationProblem
+from ..schemas import Finding, ReviewResult, Severity, TriageFile, ValidationProblem
 
 _SEVERITY_ORDER = {Severity.CRITICAL: 0, Severity.HIGH: 1, Severity.MEDIUM: 2, Severity.LOW: 3}
 

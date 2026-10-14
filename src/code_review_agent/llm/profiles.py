@@ -15,8 +15,8 @@ from typing import Any, Literal
 
 from pydantic import Field, ValidationError
 
-from .model_client import DEFAULT_HOST, ModelSettings
-from .schemas import StrictModel
+from ..schemas import StrictModel
+from .client import DEFAULT_HOST, ModelSettings
 
 PROFILE_ENV = "REVIEW_AGENT_PROFILE"
 PROFILES_FILE_ENV = "REVIEW_AGENT_PROFILES"
@@ -57,7 +57,7 @@ def _read(path: Path | None, text: str | None = None) -> dict[str, Any]:
 
 def load_profiles(extra: Path | None = None) -> ProfileFile:
     """Built-in profiles, overlaid with a user file (explicit path, $REVIEW_AGENT_PROFILES or ./models.toml)."""
-    builtin = _read(None, resources.files("code_review_agent").joinpath("models.toml").read_text(encoding="utf-8"))
+    builtin = _read(None, resources.files("code_review_agent.llm").joinpath("models.toml").read_text(encoding="utf-8"))
     merged: dict[str, Any] = {"default": builtin["default"], "profiles": dict(builtin.get("profiles", {}))}
     user_path = extra or (Path(os.environ[PROFILES_FILE_ENV]) if os.environ.get(PROFILES_FILE_ENV) else Path("models.toml"))
     if user_path.exists():

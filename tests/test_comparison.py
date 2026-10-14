@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 from test_model_client import FakeOllama
 
-from code_review_agent.cli import main
-from code_review_agent.comparison import (
+from code_review_agent.app.cli import main
+from code_review_agent.evaluation.comparison import (
     CONFIG_NAME,
     ConfigResult,
     EvalConfig,
@@ -24,7 +24,13 @@ from code_review_agent.comparison import (
     render_comparison,
     save_config,
 )
-from code_review_agent.evaluation import EvaluationError, LabelFile, RunScore, build_label_template, discover_runs
+from code_review_agent.evaluation.scoring import (
+    EvaluationError,
+    LabelFile,
+    RunScore,
+    build_label_template,
+    discover_runs,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 EXPECTED = ROOT / "evaluation" / "expected"
@@ -232,7 +238,7 @@ def test_the_recorded_commit_says_when_the_code_that_ran_was_not_committed(monke
     import subprocess
     from types import SimpleNamespace
 
-    from code_review_agent import comparison
+    from code_review_agent.evaluation import comparison
 
     def fake_run(command, **kwargs):
         if command[:2] == ["git", "rev-parse"]:
@@ -242,14 +248,14 @@ def test_the_recorded_commit_says_when_the_code_that_ran_was_not_committed(monke
     monkeypatch.setattr(subprocess, "run", fake_run)
     fake_run.status = ""
     assert comparison.current_commit() == "abc1234"
-    fake_run.status = " M src/code_review_agent/pipeline.py\n"
+    fake_run.status = " M src/code_review_agent/pipeline/multi.py\n"
     assert comparison.current_commit() == "abc1234+uncommitted"
 
 
 def test_no_git_means_no_commit_not_a_crash(monkeypatch):
     import subprocess
 
-    from code_review_agent import comparison
+    from code_review_agent.evaluation import comparison
 
     def boom(*args, **kwargs):
         raise FileNotFoundError("git")

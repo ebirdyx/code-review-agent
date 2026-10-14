@@ -6,17 +6,11 @@ that context, and the verifier's user message. All pure functions of the run rec
 
 from __future__ import annotations
 
-from .context import NUM_WIDTH, build_user_message
-from .evidence import (
-    render_leads,
-)
+from ..context.builder import NUM_WIDTH, build_user_message
+from ..context.evidence import render_leads
+from ..schemas import Finding, ReviewInput, Ticket
 from .passes import render_candidates
-from .review import RunRecord
-from .schemas import (
-    Finding,
-    ReviewInput,
-    Ticket,
-)
+from .records import RunRecord
 
 
 def render_related(review_input: ReviewInput) -> str:

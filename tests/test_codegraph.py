@@ -4,7 +4,11 @@ Pure functions on small in-memory repositories, so the exact behaviour is pinned
 showed up when the module was first tried on the real demo repository.
 """
 
-from code_review_agent.codegraph import MAX_TOTAL_CHARS, build_pack, is_test_path
+from code_review_agent.context.codegraph import (
+    MAX_TOTAL_CHARS,
+    build_pack,
+    is_test_path,
+)
 
 SERVICE = '''\
 class Service:

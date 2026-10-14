@@ -22,7 +22,7 @@ from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 from pydantic import Field
 
-from .schemas import FailureKind, ModelReview, StrictModel, public_schema
+from ..schemas import FailureKind, ModelReview, StrictModel, public_schema
 
 DEFAULT_HOST = "https://ollama.com"  # Ollama Cloud. Local Ollama: http://localhost:11434
 API_KEY_ENV = "OLLAMA_API_KEY"

@@ -22,25 +22,11 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from .assemble import multi_context_text, prepare_candidates
-from .blocks import shared_blocks, verify_user_message
-from .context import DEFAULT_MAX_CHARS, build_user_message
-from .events import EventLog
-from .evidence import (
-    DEFAULT_TOOLS,
-    RUFF_SELECT,
-    run_static_analysis,
-)
-from .model_client import ModelClient, ModelError
-from .passes import (
-    DEFAULT_PASSES,
-    MULTI_PROMPT_VERSION,
-    PASS_MODELS,
-    load_pass_system,
-    schema_for,
-)
-from .review import PassRecord, RunRecord
-from .schemas import (
+from ..context.builder import DEFAULT_MAX_CHARS, build_user_message
+from ..context.evidence import DEFAULT_TOOLS, RUFF_SELECT, run_static_analysis
+from ..events import EventLog
+from ..llm.client import ModelClient, ModelError
+from ..schemas import (
     ComplianceReview,
     ReviewedRevision,
     ReviewFailure,
@@ -48,6 +34,16 @@ from .schemas import (
     Ticket,
     VerifyReview,
 )
+from .assemble import multi_context_text, prepare_candidates
+from .blocks import shared_blocks, verify_user_message
+from .passes import (
+    DEFAULT_PASSES,
+    MULTI_PROMPT_VERSION,
+    PASS_MODELS,
+    load_pass_system,
+    schema_for,
+)
+from .records import PassRecord, RunRecord
 from .validation import InvalidOutput, parse_json_output
 
 

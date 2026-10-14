@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 
 import httpx
 
-from .schemas import PullRequestMetadata, Ticket
+from ..schemas import PullRequestMetadata, Ticket
 
 BASE_URL_ENV, EMAIL_ENV, TOKEN_ENV = "JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN"
 FIELD_ENV, PROJECTS_ENV = "JIRA_ACCEPTANCE_FIELD", "JIRA_PROJECTS"

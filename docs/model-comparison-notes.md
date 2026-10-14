@@ -39,7 +39,7 @@ Even with a local model, the PR comment and the Actions artifact live on GitHub,
   so; the model-based passes still run on the diff.
 - The benchmark (22 cases) and all measured results are **Python only**. We have not measured the quality of reviews of
   TypeScript, Java or other languages, so do not claim it works equally well there.
-- Adding a language means adding a tool to `evidence.py` (for example ESLint for TypeScript) and benchmark cases in that language.
+- Adding a language means adding a tool to `context/evidence.py` (for example ESLint for TypeScript) and benchmark cases in that language.
 
 ## Setup common to all runs
 

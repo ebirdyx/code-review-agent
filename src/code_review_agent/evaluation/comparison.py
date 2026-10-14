@@ -20,7 +20,8 @@ from typing import Literal
 
 from pydantic import ValidationError
 
-from .evaluation import (
+from ..schemas import StrictModel
+from .scoring import (
     NEAR_LINES,
     EvaluationError,
     LabelFile,
@@ -32,7 +33,6 @@ from .evaluation import (
     suggest_labels,
     totals,
 )
-from .schemas import StrictModel
 
 CONFIG_NAME = "eval-config.json"
 

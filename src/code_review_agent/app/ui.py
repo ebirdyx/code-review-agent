@@ -34,10 +34,10 @@ from urllib.parse import urlparse
 
 from pydantic import ValidationError
 
-from .events import EventLog, read_events
-from .github import GitHubError, parse_pr_reference
-from .report import render_triage_section
-from .schemas import ReviewResult, TriageFile
+from ..connectors.github import GitHubError, parse_pr_reference
+from ..events import EventLog, read_events
+from ..reporting.report import render_triage_section
+from ..schemas import ReviewResult, TriageFile
 
 SEGMENT = re.compile(r"^[\w.-]{1,200}$")
 MAX_BODY = 64 * 1024
@@ -253,7 +253,7 @@ def make_server(app: UIApp, port: int = 8765, host: str = "127.0.0.1") -> Thread
 
         def _static(self, name: str) -> None:
             try:
-                data = resources.files("code_review_agent").joinpath("web", name).read_bytes()
+                data = resources.files("code_review_agent.app").joinpath("web", name).read_bytes()
             except OSError:
                 return self._error(HTTPStatus.NOT_FOUND, "not found")
             ctype = STATIC.get(name, "text/html; charset=utf-8")

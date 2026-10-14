@@ -11,7 +11,7 @@ from importlib import resources
 
 from pydantic import BaseModel
 
-from .schemas import (
+from ..schemas import (
     ComplianceReview,
     Finding,
     ModelReview,

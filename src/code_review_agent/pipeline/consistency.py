@@ -6,14 +6,8 @@ verdict by guessing; `check_consistency` points the human at the disagreement.
 
 from __future__ import annotations
 
+from ..schemas import Category, CriterionCheck, Finding, ProblemKind, ValidationProblem
 from .merge import code_quotes
-from .schemas import (
-    Category,
-    CriterionCheck,
-    Finding,
-    ProblemKind,
-    ValidationProblem,
-)
 from .textutil import short
 
 # Findings that say "the behaviour is wrong". A security or style finding on the code a `met` verdict cites is a

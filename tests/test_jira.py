@@ -11,10 +11,10 @@ import json
 
 import httpx
 import pytest
+from test_github import HEAD, FakeGitHub  # reuse the fake GitHub from the Stage 6 tests
 
-from code_review_agent import cli
-from code_review_agent.context import build_context
-from code_review_agent.jira import (
+from code_review_agent.app import cli
+from code_review_agent.connectors.jira import (
     JiraClient,
     JiraError,
     adf_to_text,
@@ -24,10 +24,15 @@ from code_review_agent.jira import (
     resolve_ticket,
     split_criteria,
 )
-from code_review_agent.loading import load_example
-from code_review_agent.schemas import Finding, PullRequestMetadata, SupportingFile, Ticket
-from code_review_agent.validation import check_grounding
-from test_github import FakeGitHub, HEAD  # reuse the fake GitHub from the Stage 6 tests
+from code_review_agent.connectors.snapshot import load_example
+from code_review_agent.context.builder import build_context
+from code_review_agent.pipeline.validation import check_grounding
+from code_review_agent.schemas import (
+    Finding,
+    PullRequestMetadata,
+    SupportingFile,
+    Ticket,
+)
 
 # ------------------------------------------------------------------ ADF builders
 
@@ -320,7 +325,7 @@ def test_whoami_with_a_non_json_answer_and_an_unreachable_host():
 
 
 def test_doctor_reports_each_connection_and_the_exit_code_follows(monkeypatch, capsys):
-    from code_review_agent.github import GitHubClient as RealGitHub
+    from code_review_agent.connectors.github import GitHubClient as RealGitHub
 
     monkeypatch.setenv("OLLAMA_API_KEY", "k")
     monkeypatch.setattr(cli, "JiraClient", lambda: JiraClient("https://site.atlassian.net", "a@b.c", "t", transport=httpx.MockTransport(
@@ -345,7 +350,7 @@ def test_doctor_flags_a_missing_key_a_bad_jira_login_and_unreachable_github(monk
     def github_down(request):
         raise httpx.ConnectError("no route")
 
-    from code_review_agent.github import GitHubClient as RealGitHub
+    from code_review_agent.connectors.github import GitHubClient as RealGitHub
 
     monkeypatch.setattr(cli, "GitHubClient", lambda: RealGitHub(transport=httpx.MockTransport(github_down)))
     assert cli.main(["doctor"]) == 1
@@ -357,7 +362,7 @@ def test_doctor_flags_a_missing_key_a_bad_jira_login_and_unreachable_github(monk
 
 
 def test_doctor_treats_missing_jira_settings_as_optional(monkeypatch, capsys):
-    from code_review_agent.github import GitHubClient as RealGitHub
+    from code_review_agent.connectors.github import GitHubClient as RealGitHub
 
     monkeypatch.setenv("OLLAMA_API_KEY", "k")
     for name in ("JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN"):
@@ -460,7 +465,7 @@ def test_ticket_without_criteria_among_several_is_flagged():
 def test_unavailable_ticket_appears_in_the_prompt_and_as_partial_coverage():
     res = resolve_ticket(jira(FakeJira(status=(404, {}))), pr("SHOP-1: fix"))
     snap = FakeGitHub()
-    from code_review_agent.github import GitHubClient
+    from code_review_agent.connectors.github import GitHubClient
     snapshot = GitHubClient(transport=httpx.MockTransport(snap)).fetch_pull_request("o/r", 7, with_source=False)
     snapshot.notes += res.notes
     ctx = build_context(res.ticket, snapshot.to_review_input())
@@ -490,7 +495,7 @@ def cli_with_fakes(monkeypatch):
         if fake_jira is not None:
             monkeypatch.setattr(cli, "JiraClient", lambda: JiraClient(transport=httpx.MockTransport(fake_jira)))
         if fake_github is not None:
-            from code_review_agent.github import GitHubClient
+            from code_review_agent.connectors.github import GitHubClient
             monkeypatch.setattr(cli, "GitHubClient", lambda: GitHubClient(transport=httpx.MockTransport(fake_github)))
     return install
 
@@ -543,14 +548,14 @@ def test_a_failed_jira_lookup_never_reuses_the_ticket_of_an_earlier_fetch(tmp_pa
 
 
 def test_a_new_fetch_removes_every_leftover_of_the_previous_one(tmp_path):
-    from code_review_agent.github import PullRequestSnapshot
+    from code_review_agent.connectors.github import PullRequestSnapshot
 
     folder = tmp_path / "snap"
     old = PullRequestSnapshot(
         metadata=PullRequestMetadata(title="old", head_sha="a" * 40), diff="diff --git a/a.py b/a.py\n",
         supporting_files=[SupportingFile(path="old_support.py", content="x")],
         analysis_files=[SupportingFile(path="old_analysis.py", content="x")], rules="- old rule\n")
-    from code_review_agent.loading import save_snapshot
+    from code_review_agent.connectors.snapshot import save_snapshot
 
     save_snapshot(old, folder)
     (folder / "ticket.json").write_text('{"key": "OLD-1", "title": "stale"}', encoding="utf-8")

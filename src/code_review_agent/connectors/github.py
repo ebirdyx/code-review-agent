@@ -25,9 +25,9 @@ from urllib.parse import urlparse
 
 import httpx
 
-from .codegraph import build_pack
-from .evidence import added_lines
-from .schemas import PullRequestMetadata, RelatedSnippet, ReviewInput, SupportingFile
+from ..context.codegraph import build_pack
+from ..context.evidence import added_lines
+from ..schemas import PullRequestMetadata, RelatedSnippet, ReviewInput, SupportingFile
 
 API_URL = "https://api.github.com"
 TOKEN_ENV = "GITHUB_TOKEN"

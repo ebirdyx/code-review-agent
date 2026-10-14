@@ -21,7 +21,14 @@ from importlib import resources
 
 from pydantic import Field
 
-from .schemas import Coverage, ModelReview, ReviewInput, StrictModel, Ticket, public_schema
+from ..schemas import (
+    Coverage,
+    ModelReview,
+    ReviewInput,
+    StrictModel,
+    Ticket,
+    public_schema,
+)
 
 DEFAULT_PROMPT_VERSION = "review_v1"  # change only after a dev comparison (see docs)
 DEFAULT_MAX_CHARS = 30_000  # budget for untrusted content (roughly 8k tokens)

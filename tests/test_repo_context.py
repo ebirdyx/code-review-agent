@@ -9,18 +9,23 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
-from test_github import BASE, HEAD, FakeGitHub, client, file_json
+from test_github import BASE, HEAD, FakeGitHub, client
 
-from code_review_agent.github import (
+from code_review_agent.connectors.github import (
     ARCHIVE_HOSTS,
     MAX_ARCHIVE_BYTES,
     MAX_CONTEXT_FILE_CHARS,
     GitHubClient,
     GitHubError,
 )
-from code_review_agent.loading import load_example, save_snapshot
-from code_review_agent.blocks import context_summary, render_related, shared_blocks
-from code_review_agent.report import render_markdown
+from code_review_agent.connectors.snapshot import load_example, save_snapshot
+from code_review_agent.pipeline.blocks import (
+    context_summary,
+    render_related,
+    shared_blocks,
+)
+from code_review_agent.pipeline.validation import check_grounding
+from code_review_agent.reporting.report import render_markdown
 from code_review_agent.schemas import (
     Evidence,
     Finding,
@@ -29,7 +34,6 @@ from code_review_agent.schemas import (
     ReviewInput,
     ReviewResult,
 )
-from code_review_agent.validation import check_grounding
 
 SERVICE = "def f():\n    x = 2\n    return x\n"
 CALLER = "from app import f\n\n\ndef job():\n    return f()\n"
@@ -97,7 +101,7 @@ def test_a_redirect_to_another_host_or_plain_http_is_not_followed():
 
 def test_an_oversized_download_is_refused_by_header_and_by_actual_size(monkeypatch):
     data = make_zip({"a.py": "a = 1\n"})
-    monkeypatch.setattr("code_review_agent.github.MAX_ARCHIVE_BYTES", len(data) - 1)
+    monkeypatch.setattr("code_review_agent.connectors.github.MAX_ARCHIVE_BYTES", len(data) - 1)
     with pytest.raises(GitHubError, match="larger than"):
         gh(Codeload(data)).fetch_python_sources("o/r", HEAD)
 

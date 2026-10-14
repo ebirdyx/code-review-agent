@@ -10,11 +10,18 @@ from pathlib import Path
 
 import pytest
 
-from code_review_agent.cli import main
-from code_review_agent.loading import load_example
-from code_review_agent.model_client import ModelSettings
-from code_review_agent.report import render_markdown
-from code_review_agent.review import RunRecord
+from code_review_agent.app.cli import main
+from code_review_agent.connectors.snapshot import load_example
+from code_review_agent.llm.client import ModelSettings
+from code_review_agent.pipeline.records import RunRecord
+from code_review_agent.pipeline.validation import (
+    InvalidOutput,
+    check_grounding,
+    deduplicate,
+    finalize_review,
+    parse_model_output,
+)
+from code_review_agent.reporting.report import render_markdown
 from code_review_agent.schemas import (
     Coverage,
     FailureKind,
@@ -23,13 +30,6 @@ from code_review_agent.schemas import (
     ReviewFailure,
     ReviewResult,
     SupportingFile,
-)
-from code_review_agent.validation import (
-    InvalidOutput,
-    check_grounding,
-    deduplicate,
-    finalize_review,
-    parse_model_output,
 )
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -140,8 +140,8 @@ def test_failed_model_call_stays_failed_with_its_original_error():
 def test_real_model_output_with_one_malformed_finding_keeps_the_valid_one():
     # REAL gpt-oss:120b output: finding 0 is the correct boundary bug, finding 1 cites the invalid
     # evidence source "team_rules". The whole answer used to be thrown away.
+    from code_review_agent.pipeline.validation import DROPPED, parse_json_output
     from code_review_agent.schemas import ModelReview
-    from code_review_agent.validation import DROPPED, parse_json_output
 
     review, warnings = parse_json_output(raw("real-gpt-oss-defects-one-bad-source.json"), ModelReview)
     assert [f.line for f in review.findings] == [11]  # the correct finding survived
@@ -399,8 +399,8 @@ def test_cli_validate_returns_error_code_for_failed_review(tmp_path):
 
 
 def test_unquoted_field_names_are_quoted_and_flagged():
+    from code_review_agent.pipeline.validation import parse_json_output
     from code_review_agent.schemas import VerifyReview
-    from code_review_agent.validation import parse_json_output
 
     review, warnings = parse_json_output(raw("real-qwen-verify-bare-key.txt"), VerifyReview)
     assert review.verdicts[0].verdict == "supported" and review.verdicts[0].index == 1
@@ -408,8 +408,8 @@ def test_unquoted_field_names_are_quoted_and_flagged():
 
 
 def test_the_repair_never_touches_text_inside_strings_and_other_breakage_stays_invalid():
+    from code_review_agent.pipeline.validation import InvalidOutput, parse_json_output
     from code_review_agent.schemas import VerifyReview
-    from code_review_agent.validation import InvalidOutput, parse_json_output
 
     note = "a note,\nverdict: not a key"  # json.dumps escapes the newline, so no line can start with a bare word
     ok = '{\n  "verdicts": [],\n  "limitations": [' + json.dumps(note) + "]\n}"

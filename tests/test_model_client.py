@@ -14,9 +14,10 @@ from pathlib import Path
 
 import pytest
 
-from code_review_agent.loading import load_example
-from code_review_agent.model_client import ModelError, ModelSettings, OllamaClient
-from code_review_agent.review import run_review, save_run
+from code_review_agent.connectors.snapshot import load_example
+from code_review_agent.llm.client import ModelError, ModelSettings, OllamaClient
+from code_review_agent.pipeline.records import save_run
+from code_review_agent.pipeline.single import run_review
 from code_review_agent.schemas import FailureKind
 
 ROOT = Path(__file__).resolve().parent.parent

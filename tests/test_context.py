@@ -2,10 +2,15 @@
 
 from pathlib import Path
 
-from code_review_agent.cli import main
-from code_review_agent.context import annotate_diff, build_context, split_diff
-from code_review_agent.loading import load_example
-from code_review_agent.schemas import PullRequestMetadata, ReviewInput, SupportingFile, Ticket
+from code_review_agent.app.cli import main
+from code_review_agent.connectors.snapshot import load_example
+from code_review_agent.context.builder import annotate_diff, build_context, split_diff
+from code_review_agent.schemas import (
+    PullRequestMetadata,
+    ReviewInput,
+    SupportingFile,
+    Ticket,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 

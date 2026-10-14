@@ -10,19 +10,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .blocks import context_summary, shared_blocks, verify_user_message
-from .consistency import check_consistency
-from .context import build_user_message
-from .evidence import (
+from ..context.builder import build_user_message
+from ..context.evidence import (
     MAX_REPORTED_FINDINGS,
     compute_profile,
     select_reportable,
     tool_findings_to_findings,
 )
-from .merge import merge_candidates
-from .passes import PASS_MODELS, load_pass_system
-from .review import PassRecord, RunRecord
-from .schemas import (
+from ..schemas import (
     WHOLE_CHANGE,
     Category,
     ComplianceReview,
@@ -43,6 +38,11 @@ from .schemas import (
     ValidationProblem,
     VerifyReview,
 )
+from .blocks import context_summary, shared_blocks, verify_user_message
+from .consistency import check_consistency
+from .merge import merge_candidates
+from .passes import PASS_MODELS, load_pass_system
+from .records import PassRecord, RunRecord
 from .textutil import short
 from .validation import (
     DROPPED,
