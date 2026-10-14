@@ -373,3 +373,156 @@ def test_printing_a_report_with_unusual_characters_never_crashes_the_command(tmp
     done = subprocess.run([sys.executable, "-c", code], capture_output=True, env={**__import__('os').environ, "PYTHONIOENCODING": "cp1252"})
     assert done.returncode == 0, done.stderr.decode(errors="replace")
     assert b"free" in done.stdout and b"shipping" in done.stdout
+
+
+# ------------------------------------------------- grouped runs, evaluations and comparison
+
+
+def make_evaluation(app, name, label, runs=2):
+    """An evaluation folder as `eval-run` leaves it: run folders plus eval-config.json."""
+    from code_review_agent.evaluation.comparison import (
+        EvalConfig,
+        EvalRunEntry,
+        save_config,
+    )
+
+    folder = app.runs_dir / name
+    entries = []
+    for rep in range(1, runs + 1):
+        inner = write_run(folder, raw=FAULTY)
+        entries.append(EvalRunEntry(case_id="free-shipping-faulty", rep=rep, folder=inner.name, status="completed"))
+    save_config(folder, EvalConfig(label=label, created_at="2026-10-14T00:00:00+00:00", split="dev", cases=["free-shipping-faulty"], repeat=runs,
+                                   pipeline="multi", prompt_version="multi_v4", verify=True, tools=["ruff"], context=False, model="m", host="h",
+                                   notes=["made for the test"], runs=entries))
+    return folder
+
+
+def test_every_run_says_which_evaluation_folder_it_belongs_to(ui):
+    app, client, _ = ui
+    alone = make_completed_run(app)
+    inner = write_run(app.runs_dir / "eval-dev-20261012T000000", raw=FAULTY)
+    runs = {r["name"]: r for r in client.json("/api/runs")[1]}
+    assert runs[alone.name]["group"] == ""  # a review started on its own
+    assert runs[f"eval-dev-20261012T000000/{inner.name}"]["group"] == "eval-dev-20261012T000000"
+
+
+def test_groups_describe_each_evaluation_folder_and_its_recorded_configuration(ui):
+    app, client, _ = ui
+    make_completed_run(app)  # an individual review is not a group
+    make_evaluation(app, "eval-a", "multi-full", runs=2)
+    write_run(app.runs_dir / "old-batch", raw=FAULTY)  # made before configurations were recorded
+    status, groups = client.json("/api/groups")
+    assert status == 200 and {g["name"] for g in groups} == {"eval-a", "old-batch"}
+    a = next(g for g in groups if g["name"] == "eval-a")
+    assert (a["label"], a["kind"], a["runs"], a["completed"], a["failed"]) == ("multi-full", "evaluation", 2, 2, 0)
+    assert a["config"]["pipeline"] == "multi" and a["config"]["tools"] == ["ruff"] and a["config"]["notes"] == ["made for the test"]
+    old = next(g for g in groups if g["name"] == "old-batch")
+    assert (old["label"], old["kind"], old["config"]) == ("old-batch", "batch", None)
+
+
+def test_comparison_endpoint_renders_the_same_table_as_eval_compare(ui):
+    from test_comparison import FINDING, NOTHING, run_eval
+
+    app, client, _ = ui
+    app.expected_dir = ROOT / "evaluation" / "expected"
+    run_eval(app.runs_dir, "found", FINDING, "--pipeline", "single", "--label", "finds-it")
+    run_eval(app.runs_dir, "missed", NOTHING, "--pipeline", "single", "--label", "misses-it")
+    status, data = client.json("/api/compare?groups=found,missed")
+    assert status == 200
+    text = data["markdown"]
+    assert "| finds-it |" in text and "| misses-it |" in text and "PROVISIONAL" in text and "## Per case" in text
+
+
+@pytest.mark.parametrize("query, message", [
+    ("", "choose between 1 and 6"),
+    ("groups=", "choose between 1 and 6"),
+    ("groups=a,b,c,d,e,f,g", "choose between 1 and 6"),
+    ("groups=nowhere", "no such evaluation"),
+    ("groups=..", "no such evaluation"),
+    ("groups=pr-snapshots", "no such evaluation"),
+    ("groups=a/b", "no such evaluation"),
+])
+def test_comparison_refuses_bad_requests_with_a_message(ui, query, message):
+    app, client, _ = ui
+    make_evaluation(app, "a", "a")
+    status, data = client.json("/api/compare" + (("?" + query) if query else ""))
+    assert status == 400 and message in data["error"]
+
+
+def test_comparison_says_when_the_expected_answers_are_missing_and_never_leaves_the_runs_folder(ui, tmp_path):
+    app, client, _ = ui
+    make_evaluation(app, "a", "a")
+    app.expected_dir = tmp_path / "nowhere"
+    status, data = client.json("/api/compare?groups=a")
+    assert status == 400 and "expected answers" in data["error"]
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    assert client.json("/api/compare?groups=" + str(outside).replace("\\", "/"))[0] == 400
+
+
+def test_a_group_without_scorable_runs_gives_the_reason_not_a_crash(ui):
+    app, client, _ = ui
+    app.expected_dir = ROOT / "evaluation" / "expected"
+    folder = app.runs_dir / "pr-batch"
+    write_run(folder, case_id="free-shipping-faulty", raw=FAULTY)
+    (folder / "eval-config.json").unlink(missing_ok=True)
+    # the run's case has an expected answer, so this scores; a case without one must be explained
+    import json as _json
+
+    for run_json in folder.rglob("run.json"):
+        record = _json.loads(run_json.read_text(encoding="utf-8"))
+        record["case_id"] = "a-case-with-no-expected-answer"
+        run_json.write_text(_json.dumps(record), encoding="utf-8")
+    status, data = client.json("/api/compare?groups=pr-batch")
+    assert status == 400 and "no scorable runs" in data["error"]
+
+
+def test_finished_runs_are_summarised_once_and_refreshed_when_their_files_change(ui):
+    app, client, _ = ui
+    folder = make_completed_run(app)
+    first = app.summarise(folder)
+    assert app.summarise(folder) is first  # served from the cache: the page asks every few seconds
+    result = json.loads((folder / "result.json").read_text(encoding="utf-8"))
+    result["findings"] = []
+    path = folder / "result.json"
+    path.write_text(json.dumps(result), encoding="utf-8")
+    os.utime(path, (time.time() + 5, time.time() + 5))
+    assert app.summarise(folder)["findings"] == 0 and app.summarise(folder) is not first
+
+
+def test_a_run_that_is_still_running_is_never_cached(ui):
+    app, client, _ = ui
+    folder = app.runs_dir / "pr-live-20261012T000000"
+    folder.mkdir()
+    EventLog(folder / "events.jsonl").emit("model_call", "Asking", status="start")
+    assert app.summarise(folder)["status"] == "running" and folder not in app._summaries
+
+
+def test_the_list_is_long_enough_for_a_real_evaluation_history_and_still_capped(ui, monkeypatch):
+    import code_review_agent.app.ui as ui_module
+
+    app, client, _ = ui
+    assert ui_module.MAX_LISTED >= 1000
+    for _ in range(3):
+        make_completed_run(app)
+    monkeypatch.setattr(ui_module, "MAX_LISTED", 2)
+    assert len(client.json("/api/runs")[1]) == 2
+
+
+def test_the_page_has_the_filter_the_evaluations_view_and_the_new_markers():
+    source = (ROOT / "src/code_review_agent/app/web/app.js").read_text(encoding="utf-8")
+    html = (ROOT / "src/code_review_agent/app/web/index.html").read_text(encoding="utf-8")
+    assert 'id="filter"' in html and 'id="show-evals"' in html
+    for needed in ("/api/groups", "/api/compare", "#evaluations&compare=", "state.filter", "finding.criterion", "contextView", "show ${shown.length - cap} older reviews"):
+        assert needed in source, needed
+
+
+def test_the_page_script_is_valid_javascript():
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    done = subprocess.run([node, "--check", str(ROOT / "src/code_review_agent/app/web/app.js")], capture_output=True, text=True, timeout=60)
+    assert done.returncode == 0, done.stderr

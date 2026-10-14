@@ -4,7 +4,9 @@ Standard library only. It listens on the loopback address and nothing else, serv
 files from the package, and exposes a few JSON endpoints over the run folders:
 
   GET  /api/config                 which model / prompt this server will use
-  GET  /api/runs                   list of runs (live status for running ones)
+  GET  /api/runs                   list of runs (live status for running ones), each with its evaluation `group`
+  GET  /api/groups                 the evaluation folders: runs, outcome, recorded configuration
+  GET  /api/compare?groups=a,b     the side-by-side comparison of evaluation folders (same as `eval-compare`)
   GET  /api/runs/<name>            report, result, run record, events, triage of one run
   POST /api/runs/<name>/triage     save accept/dismiss decisions for the findings
   POST /api/review                 start a review of a pull request in the background
@@ -30,11 +32,13 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from pydantic import ValidationError
 
 from ..connectors.github import GitHubError, parse_pr_reference
+from ..evaluation.comparison import CONFIG_NAME, compare
+from ..evaluation.scoring import EvaluationError
 from ..events import EventLog, read_events
 from ..reporting.report import render_triage_section
 from ..schemas import ReviewResult, TriageFile
@@ -42,6 +46,9 @@ from ..schemas import ReviewResult, TriageFile
 SEGMENT = re.compile(r"^[\w.-]{1,200}$")
 MAX_BODY = 64 * 1024
 MAX_RUNNING_JOBS = 2
+MAX_LISTED = 1000  # runs returned by /api/runs (the page groups and filters them)
+MAX_COMPARED = 6  # evaluation folders in one comparison
+CONFIG_FIELDS = ("pipeline", "prompt_version", "passes", "model", "tools", "context", "verify", "repeat", "split", "agent_commit", "notes")
 RUNNING_FRESH_SECONDS = 600  # a run with no result and no activity for this long is "interrupted"
 STATIC = {"app.js": "text/javascript; charset=utf-8", "app.css": "text/css; charset=utf-8"}
 CSP = "default-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
@@ -67,6 +74,8 @@ class UIApp:
     info: dict = field(default_factory=dict)  # shown in the page header (model, prompt, ...)
     jobs: dict[str, Job] = field(default_factory=dict)
     lock: threading.Lock = field(default_factory=threading.Lock)
+    expected_dir: Path = Path("evaluation/expected")  # expected answers, needed to score a comparison
+    _summaries: dict = field(default_factory=dict)  # finished runs only: folder -> (file signature, summary)
 
     # ------------------------------------------------------------------ runs
 
@@ -102,6 +111,16 @@ class UIApp:
         return folder.relative_to(self.runs_dir).as_posix()
 
     def summarise(self, folder: Path) -> dict:
+        signature = _signature(folder)
+        cached = self._summaries.get(folder)
+        if cached and cached[0] == signature:  # the page asks every few seconds: do not re-read finished runs
+            return cached[1]
+        summary = self._summarise(folder)
+        if summary["status"] in ("completed", "failed") and (folder / "result.json").exists():
+            self._summaries[folder] = (signature, summary)
+        return summary
+
+    def _summarise(self, folder: Path) -> dict:
         run = _read_json(folder / "run.json") or {}
         result = _read_json(folder / "result.json")
         events = read_events(folder / "events.jsonl")
@@ -116,8 +135,10 @@ class UIApp:
             status = "incomplete"
         revision = run.get("revision") or ((result or {}).get("run") or {}).get("revision")
         settings = run.get("settings") or {}
+        name = self.rel(folder)
         return {
-            "name": self.rel(folder),
+            "name": name,
+            "group": name.split("/")[0] if "/" in name else "",  # the evaluation folder, or "" for an individual review
             "case_id": run.get("case_id") or folder.name,
             "created_at": run.get("created_at") or (events[0]["ts"] if events else ""),
             "status": status,
@@ -135,7 +156,57 @@ class UIApp:
 
     def list_runs(self) -> list[dict]:
         runs = [self.summarise(f) for f in self.run_folders()]
-        return sorted(runs, key=lambda r: r["created_at"], reverse=True)[:200]
+        return sorted(runs, key=lambda r: r["created_at"], reverse=True)[:MAX_LISTED]
+
+    def groups(self) -> list[dict]:
+        """The evaluation folders (runs one level deeper than the runs folder): outcome and recorded configuration."""
+        by_group: dict[str, list[dict]] = {}
+        for run in self.list_runs():
+            if run["group"]:
+                by_group.setdefault(run["group"], []).append(run)
+        out = []
+        for name, runs in by_group.items():
+            config = _read_json(self.runs_dir / name / CONFIG_NAME)
+            out.append({
+                "name": name,
+                "label": (config or {}).get("label") or name,
+                "kind": "evaluation" if config else "batch",  # a batch has no recorded configuration (made before eval-run did)
+                "runs": len(runs),
+                "latest": max(r["created_at"] for r in runs),
+                "completed": sum(r["status"] == "completed" for r in runs),
+                "failed": sum(r["status"] == "failed" for r in runs),
+                "findings": sum(r["findings"] or 0 for r in runs),
+                "config": {k: config.get(k) for k in CONFIG_FIELDS} if config else None,
+            })
+        return sorted(out, key=lambda g: g["latest"], reverse=True)
+
+    def resolve_group(self, name: str) -> Path | None:
+        if not SEGMENT.match(name) or name in (".", "..", "pr-snapshots"):
+            return None
+        path = self.runs_dir / name
+        try:
+            inside = path.resolve().is_relative_to(self.runs_dir.resolve())
+        except OSError:
+            return None
+        return path if inside and path.is_dir() else None
+
+    def compare_groups(self, names: list[str]) -> str:
+        """The comparison table (Markdown) of evaluation folders. Raises ValueError with a message for the user."""
+        if not 1 <= len(names) <= MAX_COMPARED:
+            raise ValueError(f"choose between 1 and {MAX_COMPARED} evaluations")
+        folders = []
+        for name in names:
+            folder = self.resolve_group(name)
+            if folder is None:
+                raise ValueError(f"no such evaluation: {name[:80]}")
+            folders.append(folder)
+        if not self.expected_dir.is_dir():
+            raise ValueError(f"the expected answers ({self.expected_dir}) were not found: start the UI from the repository root")
+        try:
+            text, _ = compare(folders, self.expected_dir)
+        except (EvaluationError, OSError, ValidationError) as exc:
+            raise ValueError(str(exc).splitlines()[0][:400]) from exc
+        return text
 
     def run_detail(self, folder: Path) -> dict:
         return {
@@ -197,6 +268,17 @@ class UIApp:
 
 class BusyError(Exception):
     pass
+
+
+def _signature(folder: Path) -> tuple:
+    """Modification times of the files a run summary is made from: unchanged files, unchanged summary."""
+    out = []
+    for name in ("run.json", "result.json", "events.jsonl", "triage.json"):
+        try:
+            out.append((folder / name).stat().st_mtime_ns)
+        except OSError:
+            out.append(None)
+    return tuple(out)
 
 
 def _read_text(path: Path) -> str | None:
@@ -263,7 +345,8 @@ def make_server(app: UIApp, port: int = 8765, host: str = "127.0.0.1") -> Thread
         def do_GET(self):  # noqa: N802
             if not self._origin_ok():
                 return self._error(HTTPStatus.FORBIDDEN, "forbidden host")
-            path = urlparse(self.path).path
+            parsed = urlparse(self.path)
+            path = parsed.path
             if path in ("/", "/index.html"):
                 return self._static("index.html")
             if path.startswith("/static/") and path[8:] in STATIC:
@@ -272,6 +355,14 @@ def make_server(app: UIApp, port: int = 8765, host: str = "127.0.0.1") -> Thread
                 return self._json(HTTPStatus.OK, {**app.info, "can_start": app.start_review is not None})
             if path == "/api/runs":
                 return self._json(HTTPStatus.OK, app.list_runs())
+            if path == "/api/groups":
+                return self._json(HTTPStatus.OK, app.groups())
+            if path == "/api/compare":
+                names = [n for n in parse_qs(parsed.query).get("groups", [""])[0].split(",") if n]
+                try:
+                    return self._json(HTTPStatus.OK, {"markdown": app.compare_groups(names)})
+                except ValueError as exc:
+                    return self._error(HTTPStatus.BAD_REQUEST, str(exc))
             if path.startswith("/api/runs/"):
                 folder = app.resolve_run(path[len("/api/runs/"):].strip("/"))
                 if folder is None:

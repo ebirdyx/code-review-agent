@@ -1,7 +1,12 @@
 "use strict";
 // Safety rule: text from a model, ticket or PR is only ever inserted as a DOM text node, never parsed as HTML.
 
-const state = { runs: [], selected: null, detail: null, tab: "report", job: null, config: {}, draft: {} };
+const RECENT_REVIEWS = 3;  // individual reviews listed before "show older reviews"
+
+const state = {
+  more: false, runs: [], groups: [], selected: null, detail: null, tab: "report", job: null, config: {}, draft: {},
+  filter: "", open: {}, view: "run", picked: new Set(), comparison: null,
+};
 
 function el(tag, props, ...children) {
   const node = document.createElement(tag);
@@ -115,6 +120,7 @@ function findingCard(finding, index, triage) {
   const sev = el("span", { class: "sev " + finding.severity, text: finding.severity.toUpperCase() });
   const where = finding.line ? `${finding.file}:${finding.line}` : `${finding.file} (no line)`;
   const badges = [];
+  if (finding.criterion != null) badges.push(el("span", { class: "chip bad", text: `requirement ${finding.criterion} not met` }));
   if ((finding.found_by || []).length) badges.push(el("span", { class: "chip", text: "found by " + finding.found_by.join(" + ") }));
   if (finding.source === "tool") badges.push(el("span", { class: "chip ok", text: "static analysis" }));
   else if (finding.verification === "supported") badges.push(el("span", { class: "chip ok", text: "verified" }));
@@ -187,6 +193,13 @@ function profileView(result) {
     (p.hints || []).map((h) => el("div", { class: "banner warn", text: h })));
 }
 
+function contextView(result) {
+  if (!(result.context || []).length) return null;
+  return el("div", {}, el("h2", { text: "Repository context" }),
+    el("p", { class: "muted", text: "Code outside the change that the model was shown (callers, tests, the class). Found by matching function names, so it can match the wrong function." }),
+    el("ul", {}, result.context.map((line) => el("li", {}, inline(line)))));
+}
+
 function toolsView(result) {
   if (!(result.tools || []).length) return null;
   const rows = result.tools.map((t) => el("tr", {},
@@ -213,7 +226,7 @@ function findingsView(detail) {
   const result = detail.result;
   if (!result) return el("p", { class: "hint", text: "No result yet." });
   if (result.status === "failed") return el("div", { class: "banner bad", text: `Review failed (${result.error.kind}): ${result.error.message}` });
-  const extras = [profileView(result), toolsView(result), passesView(result), checklistView(result)];
+  const extras = [profileView(result), contextView(result), toolsView(result), passesView(result), checklistView(result)];
   if (!result.findings.length) return el("div", {}, ...extras.filter(Boolean),
     el("p", { text: "No findings were reported. That is the model's claim, not a guarantee." }), dismissedView(result));
   const triage = {};
@@ -268,16 +281,111 @@ function showEmpty() {
 
 const $view = () => document.getElementById("view");
 
+function matches(run, words) {
+  if (!words.length) return true;
+  const hay = [run.case_id, run.name, run.status, run.model, run.ticket, run.group, run.pipeline, run.prompt_version].join(" ").toLowerCase();
+  return words.every((w) => hay.includes(w));
+}
+
+function runRow(r) {
+  const sub = [r.model, r.pipeline === "multi" && "multi-pass", r.head_sha && "commit " + r.head_sha, r.findings != null && `${r.findings} finding(s)`, r.triaged && "triaged"].filter(Boolean).join(" · ");
+  return el("li", { class: "run" + (r.name === state.selected ? " sel" : ""), onclick: () => selectRun(r.name) },
+    el("div", { class: "title" }, statusDot(r.status), r.case_id),
+    el("div", { class: "sub", text: `${r.status} · ${r.created_at.replace("T", " ").slice(0, 19)}` }),
+    el("div", { class: "sub", text: sub }));
+}
+
+// Runs are grouped by the evaluation folder they belong to ("" = a review started on its own).
+// A group is collapsed unless it holds the selected run; typing in the filter opens every group that matches.
 function renderRunList() {
   const ul = document.getElementById("runs");
-  ul.replaceChildren(...state.runs.map((r) => {
-    const sub = [r.model, r.pipeline === "multi" && "multi-pass", r.head_sha && "commit " + r.head_sha, r.findings != null && `${r.findings} finding(s)`, r.triaged && "triaged"].filter(Boolean).join(" · ");
-    return el("li", { class: r.name === state.selected ? "sel" : "", onclick: () => selectRun(r.name) },
-      el("div", { class: "title" }, statusDot(r.status), r.case_id),
-      el("div", { class: "sub", text: `${r.status} · ${r.created_at.replace("T", " ").slice(0, 19)}` }),
-      el("div", { class: "sub", text: sub }));
-  }));
-  if (!state.runs.length) ul.append(el("li", { class: "hint", text: "No runs yet." }));
+  const words = state.filter.toLowerCase().split(/\s+/).filter(Boolean);
+  const groups = new Map([["", []]]);
+  for (const r of state.runs) {
+    if (!groups.has(r.group)) groups.set(r.group, []);
+    groups.get(r.group).push(r);
+  }
+  const rows = [];
+  for (const [name, runs] of groups) {
+    const shown = runs.filter((r) => matches(r, words));
+    if (!shown.length && (words.length || !runs.length)) continue;
+    const holdsSelected = runs.some((r) => r.name === state.selected);
+    const open = words.length ? true : (name in state.open ? state.open[name] : (name === "" || holdsSelected));
+    const info = state.groups.find((g) => g.name === name);
+    const title = name === "" ? "Individual reviews" : name;
+    const label = info && info.label !== name ? ` (${info.label})` : "";
+    rows.push(el("li", { class: "group", onclick: () => { state.open[name] = !open; renderRunList(); } },
+      el("span", { class: "caret", text: open ? "▾" : "▸" }), el("strong", { text: title }),
+      el("span", { class: "muted", text: `${label}  ${words.length ? shown.length + " of " + runs.length : runs.length}` })));
+    const cap = name === "" && !words.length && !state.more ? RECENT_REVIEWS : Infinity;  // keep the groups below in view
+    if (open) for (const r of shown.slice(0, cap)) rows.push(runRow(r));
+    if (open && shown.length > cap) rows.push(el("li", { class: "hint", onclick: () => { state.more = true; renderRunList(); }, text: `show ${shown.length - cap} older reviews...` }));
+  }
+  ul.replaceChildren(...rows);
+  if (!rows.length) ul.append(el("li", { class: "hint", text: state.runs.length ? "No run matches the filter." : "No runs yet." }));
+}
+
+// ------------------------------------------------------------------------------- evaluations
+
+function configSummary(c) {
+  if (!c) return "no recorded configuration (made before eval-run recorded it)";
+  const bits = [c.pipeline === "multi" ? "multi-pass" : "single pass", c.prompt_version, c.model];
+  if (c.pipeline === "multi") bits.push(`tools ${(c.tools || []).length ? c.tools.join("+") : "off"}`, `context ${c.context ? "on" : "off"}`, `verifier ${c.verify ? "on" : "off"}`);
+  bits.push(`${c.repeat} repeat(s)`);
+  return bits.join(" · ");
+}
+
+async function runComparison() {
+  const names = [...state.picked];
+  history.replaceState(null, "", "#evaluations&compare=" + names.map(encodeURIComponent).join(","));  // a link you can share or reopen
+  try {
+    const out = await api("/api/compare?groups=" + names.map(encodeURIComponent).join(","));
+    state.comparison = { ok: true, text: out.markdown };
+  } catch (e) { state.comparison = { ok: false, text: e.message }; }
+  renderEvaluations();
+}
+
+function renderEvaluations() {
+  const compareButton = el("button", { class: "primary", text: "Compare selected" });
+  const note = el("span", { class: "muted" });
+  const paint = () => {
+    const n = state.picked.size;
+    compareButton.disabled = n < 1 || n > 6;
+    note.textContent = n ? `${n} selected` : "Tick one or more evaluations (at most 6).";
+  };
+  compareButton.onclick = () => { compareButton.disabled = true; runComparison(); };
+  const rows = state.groups.map((g) => {
+    const box = el("input", { type: "checkbox" });
+    box.checked = state.picked.has(g.name);
+    box.onchange = () => { if (box.checked) state.picked.add(g.name); else state.picked.delete(g.name); paint(); };
+    const notes = ((g.config && g.config.notes) || []).join(" ");
+    return el("tr", {},
+      el("td", {}, box),
+      el("td", {}, el("strong", { text: g.label }), el("span", { class: "chip " + (g.kind === "evaluation" ? "ok" : ""), text: g.kind }),
+        g.label !== g.name ? el("div", { class: "muted", text: g.name }) : null),
+      el("td", { text: `${g.completed}/${g.runs} completed${g.failed ? `, ${g.failed} failed` : ""}` }),
+      el("td", { text: g.latest.replace("T", " ").slice(0, 16) }),
+      el("td", {}, configSummary(g.config), notes ? el("div", { class: "muted", text: notes }) : null),
+      el("td", {}, el("button", { text: "Show runs", onclick: () => {
+        state.filter = g.name; document.getElementById("filter").value = g.name; state.open[g.name] = true; renderRunList();
+      } })));
+  });
+  const head = el("thead", {}, el("tr", {}, ["", "Evaluation", "Runs", "Latest", "Configuration", ""].map((h) => el("th", { text: h }))));
+  $view().replaceChildren(...[
+    el("h2", { text: "Evaluations" }),
+    el("p", { class: "muted", text: "Each folder is one configuration run on the same cases. Tick two or more and compare them side by side: the same table as `review-agent eval-compare`. Labels are location-matched unless a labels file exists, and the table says so." }),
+    state.groups.length ? el("table", { class: "evals" }, head, el("tbody", {}, rows)) : el("p", { class: "hint", text: "No evaluation folders yet. Make one with review-agent eval-run." }),
+    el("div", { class: "triage" }, compareButton, note),
+    state.comparison ? (state.comparison.ok ? renderMarkdown(state.comparison.text) : el("div", { class: "banner bad", text: state.comparison.text })) : null,
+  ].filter(Boolean));
+  paint();
+}
+
+async function showEvaluations() {
+  state.view = "evaluations"; state.selected = null; state.detail = null; state.job = null;
+  history.replaceState(null, "", "#evaluations");
+  await refreshRuns();
+  renderEvaluations();
 }
 
 function renderDetail() {
@@ -303,6 +411,7 @@ function renderDetail() {
 }
 
 async function selectRun(name) {
+  state.view = "run";
   if (state.selected !== name) state.draft = {};
   state.selected = name; state.job = null;
   history.replaceState(null, "", `#run=${encodeURIComponent(name)}&tab=${state.tab}`);
@@ -335,7 +444,10 @@ async function pollJob() {
 }
 
 async function refreshRuns() {
-  try { state.runs = await api("/api/runs"); renderRunList(); } catch (e) { /* server stopped */ }
+  try {
+    const [runs, groups] = await Promise.all([api("/api/runs"), api("/api/groups")]);
+    state.runs = runs; state.groups = groups; renderRunList();
+  } catch (e) { /* server stopped */ }
 }
 
 async function startReview(event) {
@@ -347,7 +459,7 @@ async function startReview(event) {
       pr: document.getElementById("pr").value, jira: document.getElementById("jira").checked,
       jira_projects: document.getElementById("projects").value,
     });
-    state.job = out.job; state.selected = null; renderRunList();
+    state.job = out.job; state.selected = null; state.view = "run"; renderRunList();
     await pollJob();
   } catch (e) {
     $view().replaceChildren(el("div", { class: "banner bad", text: e.message }));
@@ -356,6 +468,8 @@ async function startReview(event) {
 
 async function init() {
   document.getElementById("new-review").addEventListener("submit", startReview);
+  document.getElementById("show-evals").addEventListener("click", showEvaluations);
+  document.getElementById("filter").addEventListener("input", (e) => { state.filter = e.target.value; renderRunList(); });
   try {
     state.config = await api("/api/config");
     const c = state.config;
@@ -365,6 +479,13 @@ async function init() {
   } catch (e) { /* ignore */ }
   showEmpty();
   await refreshRuns();
+  const evalLink = location.hash.match(/^#evaluations(?:&compare=([^&]+))?/);  // deep link: #evaluations&compare=<folder>,<folder>
+  if (evalLink) {
+    const names = evalLink[1] ? decodeURIComponent(evalLink[1]).split(",").filter(Boolean) : [];
+    for (const n of names) state.picked.add(n);
+    await showEvaluations();
+    if (names.length) await runComparison();
+  }
   const link = location.hash.match(/^#run=([^&]+)(?:&tab=(\w+))?/);  // deep link: #run=<name>&tab=findings
   if (link) {
     if (["report", "findings", "timeline", "raw"].includes(link[2])) state.tab = link[2];

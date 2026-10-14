@@ -256,7 +256,13 @@ rejouer hors ligne avec `review`, à la révision exacte (`head_sha`) qui a ét�
 uv run review-agent ui --open        # http://127.0.0.1:8765/
 ```
 
-- **Liste des revues** (en cours, terminées, échouées) qui se met à jour seule.
+- **Liste des revues** (en cours, terminées, échouées) qui se met à jour seule, **groupée** : les revues lancées seules (les 3 plus récentes, puis « show older reviews »)
+  et un groupe repliable par dossier d'évaluation (`eval-run`, `eval-import`...). Le champ **Filter** cherche dans le cas, le modèle, l'état, le ticket et le nom du groupe.
+- **Vue Evaluations** (bouton en haut de la liste) : un tableau des dossiers d'évaluation avec leur configuration enregistrée (pipeline, prompt, modèle, outils, contexte,
+  vérificateur, répétitions) et leur résultat ; cocher 2 à 6 dossiers puis **Compare selected** affiche le même tableau que `review-agent eval-compare` (étiquettes provisoires
+  signalées). Lien direct : `http://127.0.0.1:8765/#evaluations&compare=dossier1,dossier2`.
+- Dans les constats : une pastille **requirement N not met** quand un constat vient d'un critère du ticket non respecté, et le panneau **Repository context** (appelants, tests,
+  fonctions appelées) montré au modèle.
 - **Lancer une revue** : saisir `proprietaire/depot#12`, cocher « Jira ticket » au besoin, puis « Review this PR ». La chronologie montre chaque étape en direct :
   lecture de la PR, lecture du ticket, construction du contexte, appel du modèle (durée, jetons), validation, rapport.
 - **Rapport**, **constats** (avec preuves et problèmes de validation), **chronologie**, **réponse brute** du modèle.

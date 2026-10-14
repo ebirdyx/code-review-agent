@@ -53,4 +53,13 @@ td.st { width: 60px; font-weight: 600; } .st.done { color: var(--ok); } .st.erro
 .md ul { padding-left: 20px; } .md code { background: #f1f4f9; padding: 0 4px; border-radius: 4px; }
 .steps { padding-left: 20px; } .steps li { margin-bottom: 6px; }
 .hint { color: var(--muted); }
+/* grouped, filterable run list and the evaluations view */
+.aside-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.aside-head h2 { margin: 0; } .aside-head button { padding: 3px 10px; font-size: 12px; }
+input[type=search] { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font: inherit; margin-bottom: 8px; }
+#runs li.group { background: #f1f4f9; margin: 6px 0 2px; font-size: 13px; border-radius: 6px; }
+#runs li.group:hover { background: #e7ecf5; }
+#runs li.group .caret { display: inline-block; width: 16px; color: var(--muted); }
+#runs li.run { margin-left: 14px; }
+table.evals td { vertical-align: top; } table.evals .chip { margin-left: 6px; }
 @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
