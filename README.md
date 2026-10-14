@@ -217,7 +217,9 @@ uv run review-agent fetch-ticket SHOP-1                           # vérifie la 
 uv run review-agent review-pr proprietaire/depot#12 --jira       # PR + ticket Jira lié
 
 # 4. Évaluation
-uv run review-agent eval-run --split dev --repeat 3              # appelle le modèle
+uv run review-agent eval-run --split dev --repeat 3 --label multi-full   # appelle le modèle ; enregistre la configuration (eval-config.json)
+uv run review-agent eval-run --split dev --repeat 3 --pipeline single --label single-pass
+uv run review-agent eval-compare runs/eval-single-pass-* runs/eval-multi-full-*   # compare les configurations côte à côte (sans modèle)
 uv run review-agent eval-template runs/eval-dev-<horodatage>     # propose des étiquettes
 uv run review-agent eval-score  runs/eval-dev-<horodatage> --labels evaluation/labels/<fichier>.json --split dev
 uv run review-agent eval-revalidate runs/eval-dev-<horodatage>   # revalide sans rappeler le modèle
@@ -357,7 +359,8 @@ N'y envoyez pas de code confidentiel.
 trois variables `JIRA_*`), ouvrir un **nouveau** terminal, puis `uv run review-agent doctor` (tout doit afficher OK),
 `uv run review-agent ui --open`, et lancer une revue sur `ebirdyx/shipping-demo#1` (ticket KAN-4) ou sur votre propre PR.
 
-Documents utiles : `docs/model-comparison-notes.md` (observations réelles par modèle), `docs/comparison-protocol.md`
+Documents utiles : `docs/evaluation-howto.md` (comment évaluer et comparer des configurations, de façon reproductible), `docs/findings-log.md`
+(ce que nous avons appris en construisant l'agent), `docs/model-comparison-notes.md` (observations réelles par modèle), `docs/comparison-protocol.md`
 (comment comparer avec Claude ou ChatGPT, sans clé d'API), `integration/code-review.yml` (workflow GitHub Actions).
 
 À faire, dans l'ordre :

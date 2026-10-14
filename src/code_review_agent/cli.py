@@ -1,7 +1,7 @@
 """Command-line entry point.
 
 Commands: check-examples, schema, build-context, review, fetch-ticket, fetch-pr, review-pr, validate,
-          eval-run, eval-revalidate, eval-template, eval-score.
+          eval-run, eval-compare, eval-revalidate, eval-template, eval-score.
 """
 
 from __future__ import annotations
@@ -28,6 +28,9 @@ from .evaluation import (
     score_run,
 )
 from .comment import MARKER, render_pr_comment
+from .comparison import (
+    EvalConfig, EvalRunEntry, auto_label, compare, current_commit, now_iso, save_config,
+)
 from .events import EventLog, echo_to_stderr
 from .github import GitHubClient, GitHubError
 from .jira import FIELD_ENV, JiraClient, JiraError
@@ -469,33 +472,68 @@ def ui_command(args: argparse.Namespace) -> int:
 # -------------------------------------------------------------------- evaluation
 
 
+def _case_folders(roots: list[Path]) -> list[str]:
+    """Names of the example folders (they contain pr.json) found directly inside each root."""
+    return sorted({p.name for root in roots if root.is_dir() for p in root.iterdir() if (p / "pr.json").exists()})
+
+
+def _eval_config(args: argparse.Namespace, settings: ModelSettings, kwargs: dict, split_name: str, case_ids: list[str]) -> EvalConfig:
+    """The effective configuration of this evaluation, as it will actually run (the single pipeline ignores tools,
+    context and the verifier, so they are recorded as off)."""
+    multi = kwargs["pipeline"] == "multi"
+    tools = list(kwargs["tools"]) if multi else []
+    context = bool(kwargs["use_context"]) if multi else False
+    verify = bool(kwargs["verify"]) if multi else False
+    prompt = kwargs["prompt_version"] or (MULTI_PROMPT_VERSION if multi else DEFAULT_PROMPT_VERSION)
+    return EvalConfig(
+        label=getattr(args, "label", None) or auto_label(kwargs["pipeline"], verify, tools, context),
+        created_at=now_iso(), split=split_name, cases=case_ids, repeat=args.repeat,
+        pipeline=kwargs["pipeline"], prompt_version=prompt, passes=kwargs["passes"] if multi else None,
+        verify=verify, tools=tools, context=context, ruff_select=kwargs["ruff_select"] if multi else None,
+        model=settings.model, host=settings.host, profile=settings.profile,
+        temperature=settings.temperature, seed=settings.seed, agent_commit=current_commit(),
+    )
+
+
 def eval_run_command(args: argparse.Namespace) -> int:
-    """Run the model on every case of a split, `--repeat` times. Needs the API key."""
+    """Run the model on every case of a split (or of --cases-dir), `--repeat` times, and record the configuration."""
+    roots = list(args.cases_dir) if args.cases_dir else CASE_ROOTS
     try:
-        split = load_split(args.split_file)
-        if args.split == "heldout" and not args.confirm_frozen:
-            print(
-                "Held-out cases must only be run once the prompt is frozen, otherwise they stop "
-                "being held out. Re-run with --confirm-frozen to confirm.",
-                file=sys.stderr,
-            )
-            return 1
-        case_ids = args.cases.split(",") if args.cases else split.cases(args.split)
+        if args.cases_dir:  # custom cases: no split file applies, every example folder found is a case
+            split_name = "custom"
+            case_ids = args.cases.split(",") if args.cases else _case_folders(roots)
+            if not case_ids:
+                raise EvaluationError(f"No example folders (with a pr.json) found in {', '.join(map(str, roots))}")
+        else:
+            split = load_split(args.split_file)
+            split_name = args.split
+            if args.split == "heldout" and not args.confirm_frozen:
+                print(
+                    "Held-out cases must only be run once the prompt is frozen, otherwise they stop "
+                    "being held out. Re-run with --confirm-frozen to confirm.",
+                    file=sys.stderr,
+                )
+                return 1
+            case_ids = args.cases.split(",") if args.cases else split.cases(args.split)
         client = _make_client(args)
-    except (OSError, ValidationError) as exc:
+        kwargs = _pipeline_kwargs(args)
+    except (OSError, ValidationError, EvaluationError) as exc:
         print(f"Cannot start evaluation: {exc}", file=sys.stderr)
         return 1
     except ModelError as exc:
         print(f"[{exc.kind}] {exc.message}", file=sys.stderr)
         return 1
 
-    runs_dir = args.runs or Path("runs") / f"eval-{args.split}-{datetime.now(UTC):%Y%m%dT%H%M%S}"
     s = client.settings
-    print(f"Evaluating {len(case_ids)} case(s) x {args.repeat} with {s.model}; saving to {runs_dir}")
+    config = _eval_config(args, s, kwargs, split_name, case_ids)
+    stamp = datetime.now(UTC)
+    runs_dir = args.runs or Path("runs") / f"eval-{config.label}-{stamp:%Y%m%dT%H%M%S}"
+    save_config(runs_dir, config)
+    print(f"Evaluating {len(case_ids)} case(s) x {args.repeat} as '{config.label}' with {s.model}; saving to {runs_dir}")
     failures = 0
     for case_id in case_ids:
         try:
-            example = find_case_dir(case_id, CASE_ROOTS)
+            example = find_case_dir(case_id, roots)
         except EvaluationError as exc:
             print(f"  {case_id}: cannot load ({exc})", file=sys.stderr)
             failures += 1
@@ -504,20 +542,37 @@ def eval_run_command(args: argparse.Namespace) -> int:
             try:
                 folder, result, _ = review_folder(
                     example, client=client, runs_dir=runs_dir, max_chars=args.max_chars,
-                    events=EventLog(), case_id=case_id, **_pipeline_kwargs(args),
+                    events=EventLog(), case_id=case_id, **kwargs,
                 )
             except (OSError, ValidationError, ValueError) as exc:
                 print(f"  {case_id}: cannot load ({exc})", file=sys.stderr)
                 failures += 1
                 break
+            config.runs.append(EvalRunEntry(case_id=case_id, rep=rep, folder=folder.name, status=result.status))
+            save_config(runs_dir, config)  # kept up to date, so an interrupted evaluation can still be compared
             if result.status == "completed":
                 detail = f"{len(result.findings)} finding(s), {len(result.problems)} unconfirmed"
             else:
                 failures += 1
                 detail = f"FAILED [{result.error.kind}] {result.error.message}"
             print(f"  {case_id} #{rep}: {result.status}, {detail}  ({folder.name})")
-    print(f"Done. Next: review-agent eval-template {runs_dir}")
+    print(f"Done. Next: review-agent eval-compare {runs_dir} [other folders...]  (or eval-template / eval-score for hand labels)")
     return 1 if failures else 0
+
+
+def eval_compare_command(args: argparse.Namespace) -> int:
+    """Put several evaluation folders side by side (configurations, results, per-case matrix). No model is called."""
+    try:
+        text, _ = compare(list(args.runs_dirs), args.expected, args.labels)
+    except (EvaluationError, OSError, ValidationError) as exc:
+        print(f"Cannot compare: {exc}", file=sys.stderr)
+        return 1
+    print(text)
+    if args.out:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(text, encoding="utf-8")
+        print(f"Saved to {args.out}", file=sys.stderr)
+    return 0
 
 
 def eval_revalidate_command(args: argparse.Namespace) -> int:
@@ -531,7 +586,7 @@ def eval_revalidate_command(args: argparse.Namespace) -> int:
         folder = run_json.parent
         try:
             record = RunRecord.model_validate_json(run_json.read_text(encoding="utf-8"))
-            ticket, review_input = load_example(find_case_dir(record.case_id, CASE_ROOTS))
+            ticket, review_input = load_example(find_case_dir(record.case_id, list(args.cases_dir) if args.cases_dir else CASE_ROOTS))
             if record.pipeline == "multi":
                 rebuilt = multi_context_text(record, ticket, review_input)
             else:
@@ -687,15 +742,25 @@ def main(argv: list[str] | None = None) -> int:
     erun.add_argument("--runs", type=Path, help="output folder (default runs/eval-<split>-<time>)")
     erun.add_argument("--split-file", type=Path, default=SPLIT_FILE)
     erun.add_argument("--confirm-frozen", action="store_true", help="required for the held-out split")
+    erun.add_argument("--label", help="name of this configuration in comparisons (default: made from the flags, e.g. multi-no-context)")
+    erun.add_argument("--cases-dir", type=Path, action="append",
+                      help="folder of example folders to evaluate instead of the split (repeatable); every folder with a pr.json is a case")
     _add_model_args(erun)
 
     erev = sub.add_parser("eval-revalidate", help="re-run validation on saved responses (no model call)")
     erev.add_argument("runs_dir", type=Path)
+    erev.add_argument("--cases-dir", type=Path, action="append", help="where the cases are, if not evaluation/cases and examples")
 
     etpl = sub.add_parser("eval-template", help="create a labels file with suggested labels")
     etpl.add_argument("runs_dir", type=Path)
     etpl.add_argument("--out", type=Path, default=Path("evaluation/labels/labels.json"))
     etpl.add_argument("--expected", type=Path, default=EXPECTED_DIR)
+
+    ecmp = sub.add_parser("eval-compare", help="compare evaluation folders side by side (no model call)")
+    ecmp.add_argument("runs_dirs", type=Path, nargs="+", help="folders made by eval-run (each has an eval-config.json)")
+    ecmp.add_argument("--labels", type=Path, help="one labels file for all folders (default: <folder>/labels.json, else suggested from location)")
+    ecmp.add_argument("--expected", type=Path, default=EXPECTED_DIR, help="expected answers (default evaluation/expected)")
+    ecmp.add_argument("--out", type=Path, help="also save the comparison as Markdown")
 
     escore = sub.add_parser("eval-score", help="compute precision, recall, F1 from labelled runs")
     escore.add_argument("runs_dir", type=Path)
@@ -734,6 +799,8 @@ def main(argv: list[str] | None = None) -> int:
         return eval_template_command(args)
     if args.command == "eval-score":
         return eval_score_command(args)
+    if args.command == "eval-compare":
+        return eval_compare_command(args)
     print(json.dumps(public_schema(SCHEMAS[args.name]), indent=2))
     return 0
 
