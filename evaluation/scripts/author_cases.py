@@ -15,7 +15,7 @@ Diffs are produced with difflib so hunk headers are correct. The expected line
 number is computed from a `anchor` string (text of the faulty line in the new
 file), which must match exactly one line.
 
-Run from the repository root:  uv run python evaluation/author_cases.py
+Run from the repository root:  uv run python evaluation/scripts/author_cases.py
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ import difflib
 import json
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent  # the evaluation/ folder (this script lives in evaluation/scripts/)
 CASES_DIR = ROOT / "cases"
 EXPECTED_DIR = ROOT / "expected"
 

@@ -10,7 +10,7 @@ Date: 2026-10-14. Same six pull requests of `ebirdyx/ticket-system-demo`, same s
 | **C** | LLM + static tools + repository context (callers, callees, tests, class) | (default) |
 
 Results are in `A/`, `B/`, `C/` (`prN/result.json` and `report.md`); the table below is produced by
-`evaluation/score_context_ablation.py` from those files. **Six pull requests, one run each, one non-deterministic model:
+`evaluation/scripts/score_context_ablation.py` from those files. **Six pull requests, one run each, one non-deterministic model:
 this is an illustration, not a statistical result.** Differences of one or two findings are inside the run-to-run noise we
 saw between earlier runs of the same configuration.
 

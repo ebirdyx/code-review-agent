@@ -399,4 +399,4 @@ Si le point d'entrée change (déplacement de `cli.py`), arrêter l'interface pu
 
 Un cas ajouté au banc d'essai : créer `evaluation/cases/<id>/` (`ticket.json`, `pr.json`, `change.diff`) et
 `evaluation/expected/<id>.json`, l'ajouter à `evaluation/split.json`, puis `uv run pytest`.
-`evaluation/author_cases.py` montre comment les cas actuels ont été générés (brouillon IA : à relire).
+`evaluation/scripts/author_cases.py` montre comment les cas actuels ont été générés (brouillon IA : à relire).
