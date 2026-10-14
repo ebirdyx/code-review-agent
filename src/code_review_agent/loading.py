@@ -7,7 +7,7 @@ import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 
-from .schemas import ExpectedReview, PullRequestMetadata, ReviewInput, SupportingFile, Ticket
+from .schemas import ExpectedReview, PullRequestMetadata, RelatedSnippet, ReviewInput, SupportingFile, Ticket
 
 
 def load_example(folder: Path) -> tuple[Ticket | None, ReviewInput]:
@@ -43,9 +43,18 @@ def load_example(folder: Path) -> tuple[Ticket | None, ReviewInput]:
         rules = rules_path.read_text(encoding="utf-8")
         rules_source = rules_source or "rules.md"
 
+    related: list[RelatedSnippet] = []
+    facts: list[str] = []
+    related_path = folder / "related.json"  # written by `fetch-pr`: callers, callees, tests, class (code graph)
+    if related_path.exists():
+        data = json.loads(related_path.read_text(encoding="utf-8"))
+        related = [RelatedSnippet.model_validate(item) for item in data.get("snippets", [])]
+        facts = [str(f) for f in data.get("facts", [])]
+
     return ticket, ReviewInput(
         pr=pr, diff=diff, supporting_files=supporting, input_notes=notes,
         analysis_files=analysis, rules=rules, rules_source=rules_source,
+        related_code=related, related_facts=facts,
     )
 
 
@@ -74,7 +83,7 @@ def save_snapshot(snapshot, folder: Path) -> None:
     folder.mkdir(parents=True, exist_ok=True)
     # Start clean. The folder is named after the reviewed commit, so a second fetch of the same PR reuses it:
     # leftovers from the first fetch (a ticket, rules, files) must never be mistaken for this fetch's result.
-    for name in ("pr.json", "change.diff", "source.json", "ticket.json", "rules.md"):
+    for name in ("pr.json", "change.diff", "source.json", "ticket.json", "rules.md", "related.json"):
         (folder / name).unlink(missing_ok=True)
     for name in ("supporting", "analysis"):
         shutil.rmtree(folder / name, ignore_errors=True)
@@ -84,6 +93,10 @@ def save_snapshot(snapshot, folder: Path) -> None:
     _write_files(folder, "analysis", getattr(snapshot, "analysis_files", []))
     if getattr(snapshot, "rules", None):
         (folder / "rules.md").write_text(snapshot.rules, encoding="utf-8")
+    if getattr(snapshot, "related_code", None) or getattr(snapshot, "related_facts", None):
+        (folder / "related.json").write_text(
+            json.dumps({"snippets": [s.model_dump() for s in snapshot.related_code], "facts": snapshot.related_facts}, indent=2),
+            encoding="utf-8")
     (folder / "source.json").write_text(
         json.dumps({"fetched_at": datetime.now(UTC).isoformat(timespec="seconds"), "notes": snapshot.notes,
                     "rules_source": getattr(snapshot, "rules_source", None)}, indent=2),

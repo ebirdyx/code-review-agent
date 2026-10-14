@@ -1,0 +1,208 @@
+{
+  "status": "completed",
+  "findings": [
+    {
+      "category": "boundary_condition",
+      "severity": "medium",
+      "file": "tickets/service.py",
+      "line": 50,
+      "title": "Escalation condition excludes tickets exactly 48 hours old",
+      "explanation": "The code uses a strict greater-than comparison (`> ESCALATION_AGE`) to decide whether a ticket should be escalated. The acceptance criteria require tickets that have existed for 48 hours **or more** to be escalated. Tickets that are exactly 48 hours old will not satisfy the `>` condition, so they will not be escalated, violating the specification. Also reported by compliance as requirement_mismatch: The ticket requires escalation for tickets that are 48 hours old or more (>= 48h), but the code only escalates when the age is strictly greater than 48 hours, excluding tickets exactly 48 hours old.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "if now - ticket.created_at > ESCALATION_AGE:"
+        },
+        {
+          "source": "ticket",
+          "quote": "An open ticket that has existed for 48 hours or more is raised by one priority level."
+        }
+      ],
+      "found_by": [
+        "compliance",
+        "defects"
+      ],
+      "verification": "supported",
+      "verification_note": "The code uses `if now - ticket.created_at > ESCALATION_AGE:` which excludes tickets exactly 48 hours old, while the acceptance criteria require escalation for tickets 48 hours or more.",
+      "source": "llm"
+    }
+  ],
+  "limitations": [],
+  "error": null,
+  "run": {
+    "revision": {
+      "repository": "ebirdyx/ticket-system-demo",
+      "pr_number": 2,
+      "url": "https://github.com/ebirdyx/ticket-system-demo/pull/2",
+      "base_sha": "31011419c5a58b58220c9be837409de5616c9a2f",
+      "head_sha": "2ad2b01eaa423cc125af1ff5b0df8781230c15a0"
+    },
+    "case_id": "ebirdyx-ticket-system-demo-pr2-2ad2b01",
+    "created_at": "2026-10-14T01:50:33+00:00",
+    "prompt_version": "multi_v4",
+    "model": "gpt-oss:120b",
+    "host": "https://ollama.com",
+    "duration_s": 14.779,
+    "prompt_tokens": 24198,
+    "completion_tokens": 4957,
+    "ticket": "TS-2: Escalate stale tickets"
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [],
+  "problems": [],
+  "duplicates_removed": 2,
+  "pipeline": "multi",
+  "passes": [
+    {
+      "name": "compliance",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 4.78,
+      "prompt_tokens": 5314,
+      "completion_tokens": 1543,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "defects",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 3.02,
+      "prompt_tokens": 4709,
+      "completion_tokens": 847,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "security",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.48,
+      "prompt_tokens": 4643,
+      "completion_tokens": 765,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "standards",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 3.14,
+      "prompt_tokens": 4716,
+      "completion_tokens": 1293,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "verify",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.03,
+      "prompt_tokens": 4816,
+      "completion_tokens": 509,
+      "findings": 1,
+      "message": ""
+    }
+  ],
+  "criteria": [
+    {
+      "number": 1,
+      "text": "An open ticket that has existed for 48 hours or more is raised by one priority level.",
+      "verdict": "not_met",
+      "explanation": "The ticket requires escalation for tickets that are 48 hours old or more (>= 48h), but the code only escalates when the age is strictly greater than 48 hours, excluding tickets exactly 48 hours old.",
+      "evidence": [
+        {
+          "source": "ticket",
+          "quote": "An open ticket that has existed for 48 hours or more is raised by one priority level."
+        },
+        {
+          "source": "code",
+          "quote": "if now - ticket.created_at > ESCALATION_AGE:"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 50,
+      "severity": "medium"
+    },
+    {
+      "number": 2,
+      "text": "An urgent ticket stays urgent.",
+      "verdict": "met",
+      "explanation": "The code only raises the priority when the current priority is not already the highest (URGENT), so urgent tickets remain urgent.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "if index < len(PRIORITY_ORDER) - 1:"
+        },
+        {
+          "source": "code",
+          "quote": "ticket.priority = PRIORITY_ORDER[index + 1]"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 51,
+      "severity": "medium"
+    },
+    {
+      "number": 3,
+      "text": "Tickets that are not open (in progress, resolved, closed) are never escalated.",
+      "verdict": "met",
+      "explanation": "The escalation loop iterates only over tickets with status OPEN, so tickets that are not open are never considered for escalation.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "for ticket in self.store.list_by_status(Status.OPEN):"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 49,
+      "severity": "medium"
+    }
+  ],
+  "dismissed": [
+    {
+      "finding": {
+        "category": "security",
+        "severity": "medium",
+        "file": "tickets/service.py",
+        "line": 45,
+        "title": "Missing authorization check for ticket escalation",
+        "explanation": "The `escalate_stale` method can be called by any caller and will modify ticket priorities without verifying the caller's permissions, allowing unauthorized users to elevate ticket priority. Also reported by standards as maintainability: The new public method `escalate_stale` adds behaviour that tickets older than 48 hours are escalated. The repository's test suite includes tests for old tickets (72 h), recent tickets (1 h), urgent tickets, and non‑open tickets, but it lacks a test for the exact 48‑hour boundary required by the team rule. This omission violates rule 4, which mandates tests for boundary values such as \"exactly 48 …",
+        "evidence": [
+          {
+            "source": "code",
+            "quote": "def escalate_stale(self, now: datetime | None = None) -> list[Ticket]:\n    \"\"\"Raise the priority of open tickets that are old enough. Returns the tickets that were changed.\"\"\"\n    now = now or datetime.now(UTC)\n    changed = []\n    for ticket in self.store.list_by_status(Status.OPEN):\n        if now - ticket.created_at > ESCALATION_AGE:\n            index = PRIORITY_ORDER.index(ticket.priority)\n            if index < len(PRIORITY_ORDER) - 1:\n                ticket.priority = PRIORITY_ORDER[index + 1]\n                self.store.save(ticket)\n                changed.append(ticket)\n    return changed"
+          },
+          {
+            "source": "rules",
+            "quote": "4. Every change in behaviour comes with a test, including the boundary values (for example \"exactly 48 hours\")."
+          }
+        ],
+        "found_by": [
+          "security",
+          "standards"
+        ],
+        "verification": null,
+        "verification_note": "",
+        "source": "llm"
+      },
+      "reason": "No evidence of a required permission check for escalation is present in the ticket, PR description, or code, so the claim of missing authorization cannot be substantiated."
+    }
+  ],
+  "tools": [],
+  "change_profile": {
+    "files_changed": 2,
+    "lines_added": 53,
+    "lines_removed": 0,
+    "languages": {
+      ".py": 2
+    },
+    "source_files": 1,
+    "test_files": 1,
+    "hints": []
+  },
+  "context": []
+}

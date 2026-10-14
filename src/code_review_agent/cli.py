@@ -143,6 +143,8 @@ def _add_model_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--no-tools", action="store_true", help="multi only: do not run static analysis")
     parser.add_argument("--ruff-select", default=RUFF_SELECT, help=f"Ruff rule families to run (default {RUFF_SELECT})")
     parser.add_argument("--rules", type=Path, help="team coding rules file (default: .review-agent/rules.md from the PR's base branch)")
+    parser.add_argument("--no-context", action="store_true",
+                        help="do not use (or, for a pull request, do not build) the repository context: callers, callees, tests")
 
 
 def _pipeline_kwargs(args: argparse.Namespace) -> dict:
@@ -162,6 +164,7 @@ def _pipeline_kwargs(args: argparse.Namespace) -> dict:
         "tools": () if args.no_tools else (tuple(t.strip() for t in args.tools.split(",") if t.strip()) if args.tools else DEFAULT_TOOLS),
         "ruff_select": args.ruff_select,
         "rules_file": args.rules,
+        "use_context": not getattr(args, "no_context", False),
     }
 
 
@@ -287,7 +290,7 @@ def _fetch_snapshot(args: argparse.Namespace, events: EventLog | None = None) ->
         options = PRFetchOptions.from_cli(
             jira=args.jira, jira_projects=args.jira_projects, ticket_keys=args.ticket_key,
             ticket_file=args.ticket, max_files=args.max_files, no_source=args.no_source,
-            no_tools=getattr(args, "no_tools", False),
+            no_tools=getattr(args, "no_tools", False), no_context=getattr(args, "no_context", False),
         )
         # The lambdas look the classes up when called, so tests can substitute them on this module.
         folder, snapshot = fetch_snapshot(
@@ -646,6 +649,7 @@ def main(argv: list[str] | None = None) -> int:
 
     fpr = sub.add_parser("fetch-pr", help="download a GitHub pull request (read-only) as an example folder")
     _add_pr_args(fpr)
+    fpr.add_argument("--no-context", action="store_true", help="do not build the repository context (callers, callees, tests)")
 
     rpr = sub.add_parser("review-pr", help="download a GitHub pull request, then review it with the model")
     _add_pr_args(rpr)

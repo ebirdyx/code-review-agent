@@ -234,7 +234,10 @@ class Grounder:
     def __init__(self, ticket: Ticket | None, review_input: ReviewInput):
         self.diff_lines, diff_text = _index_diff(review_input.diff)
         self.supporting = {s.path: s.content for s in review_input.supporting_files}
-        code = _squash("\n".join(diff_text + list(self.supporting.values())))
+        self.related: dict[str, list[tuple[int, int]]] = {}  # file -> line ranges of the related snippets shown
+        for s in review_input.related_code:
+            self.related.setdefault(s.path, []).append((s.start_line, s.end_line))
+        code = _squash("\n".join(diff_text + list(self.supporting.values()) + [s.text for s in review_input.related_code]))
         # Quotes may come from the raw ticket fields or from the rendered text the model was
         # shown (which numbers the criteria: "1. ..."), so accept both.
         ticket_text = (
@@ -254,12 +257,18 @@ class Grounder:
             if line is not None and line > total:
                 return ProblemKind.LINE_OUT_OF_RANGE, f"{file} has {total} lines, but line {line} is cited."
         elif file in self.diff_lines:
-            if line is not None and line not in self.diff_lines[file]:
+            if line is not None and line not in self.diff_lines[file] and not self._in_related(file, line):
                 return ProblemKind.LINE_NOT_IN_DIFF, f"Line {line} of {file} is not a line shown in the diff."
+        elif file in self.related:
+            if line is not None and not self._in_related(file, line):
+                return ProblemKind.LINE_OUT_OF_RANGE, f"Line {line} of {file} is outside the related code that was shown."
         else:
-            known = sorted(set(self.diff_lines) | set(self.supporting))
+            known = sorted(set(self.diff_lines) | set(self.supporting) | set(self.related))
             return ProblemKind.UNKNOWN_FILE, f"{file} is not in the provided input (known files: {', '.join(known) or 'none'})."
         return None
+
+    def _in_related(self, file: str, line: int) -> bool:
+        return any(a <= line <= b for a, b in self.related.get(file, []))
 
     def quote(self, ev) -> tuple[ProblemKind, str] | None:
         haystack = self._haystacks[ev.source]

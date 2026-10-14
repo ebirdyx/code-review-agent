@@ -1,0 +1,259 @@
+{
+  "status": "completed",
+  "findings": [
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/service.py",
+      "line": 43,
+      "title": "Rule: public functions must have docstring stating return or raise",
+      "explanation": "The public method `add_comment` has a one-line docstring that mentions the raised exception but does not state what the function returns, violating the rule that docstrings must say what they return or raise.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "\"\"\"Add a comment to an existing ticket. Raises ValueError if it is empty or longer than MAX_COMMENT.\"\"\""
+        },
+        {
+          "source": "rules",
+          "quote": "Public functions have type hints and a one-line docstring that says what they return or raise."
+        },
+        {
+          "source": "code",
+          "quote": "\"\"\"Comments of a ticket, oldest first.\"\"\""
+        }
+      ],
+      "found_by": [
+        "standards"
+      ],
+      "verification": "supported",
+      "verification_note": "The `add_comment` method has a one-line docstring that mentions raised ValueError but does not state the return type, violating the rule that docstrings must say what they return or raise.",
+      "source": "llm"
+    },
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/store.py",
+      "line": 87,
+      "title": "Rule: public functions must have docstring stating return or raise",
+      "explanation": "The public method `list_comments` has a one-line docstring that describes ordering but does not state the return value, violating the rule that docstrings must say what they return or raise.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "\"\"\"Comments of a ticket, oldest first.\"\"\""
+        },
+        {
+          "source": "rules",
+          "quote": "Public functions have type hints and a one-line docstring that says what they return or raise."
+        }
+      ],
+      "found_by": [
+        "standards"
+      ],
+      "verification": "supported",
+      "verification_note": "The `list_comments` method's docstring describes ordering but does not mention the return value, breaching the rule that public functions' docstrings must state what they return or raise.",
+      "source": "llm"
+    }
+  ],
+  "limitations": [
+    "The review cannot assess risks related to how comment data (author, body) is later rendered or processed outside the provided code, such as potential XSS vulnerabilities."
+  ],
+  "error": null,
+  "run": {
+    "revision": {
+      "repository": "ebirdyx/ticket-system-demo",
+      "pr_number": 1,
+      "url": "https://github.com/ebirdyx/ticket-system-demo/pull/1",
+      "base_sha": "31011419c5a58b58220c9be837409de5616c9a2f",
+      "head_sha": "cdc6d0b435f351dcbe672c331bbda655bf4efc7c"
+    },
+    "case_id": "ebirdyx-ticket-system-demo-pr1-cdc6d0b",
+    "created_at": "2026-10-14T01:45:43+00:00",
+    "prompt_version": "multi_v4",
+    "model": "gpt-oss:120b",
+    "host": "https://ollama.com",
+    "duration_s": 17.467,
+    "prompt_tokens": 37238,
+    "completion_tokens": 5323,
+    "ticket": "TS-1: Comments on tickets"
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [],
+  "problems": [
+    {
+      "finding_index": null,
+      "criterion_index": 2,
+      "kind": "quote_not_found",
+      "message": "Quoted code text was not found in the input: \"MAX_COMMENT = 2000\n...\nif len(body) > MAX_COMMENT:\n    raise ValueError(f\"a comment is at most {MAX_COMMENT} characters\")\""
+    }
+  ],
+  "duplicates_removed": 1,
+  "pipeline": "multi",
+  "passes": [
+    {
+      "name": "compliance",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 4.55,
+      "prompt_tokens": 7976,
+      "completion_tokens": 1385,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "defects",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 3.83,
+      "prompt_tokens": 7371,
+      "completion_tokens": 964,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "security",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 3.48,
+      "prompt_tokens": 7305,
+      "completion_tokens": 816,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "standards",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 3.83,
+      "prompt_tokens": 7378,
+      "completion_tokens": 1402,
+      "findings": 3,
+      "message": ""
+    },
+    {
+      "name": "verify",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.48,
+      "prompt_tokens": 7208,
+      "completion_tokens": 756,
+      "findings": 0,
+      "message": ""
+    }
+  ],
+  "criteria": [
+    {
+      "number": 1,
+      "text": "Any user can add a comment to an existing ticket.",
+      "verdict": "met",
+      "explanation": "The add_comment method accepts any author string and stores the comment without permission checks, allowing any user to add a comment.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def add_comment(self, ticket_id: int, author: str, body: str) -> Comment:\n    \"\"\"Add a comment to an existing ticket. Raises ValueError if it is empty or longer than MAX_COMMENT.\"\"\"\n    self.get(ticket_id)  # raises TicketNotFound\n    body = body.strip()\n    if not body:\n        raise ValueError(\"a comment cannot be empty\")\n    if len(body) > MAX_COMMENT:\n        raise ValueError(f\"a comment is at most {MAX_COMMENT} characters\")\n    return self.store.add_comment(Comment(id=0, ticket_id=ticket_id, author=author, body=body))"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 42,
+      "severity": "medium"
+    },
+    {
+      "number": 2,
+      "text": "An empty or whitespace-only comment is rejected.",
+      "verdict": "met",
+      "explanation": "The method strips whitespace and raises ValueError when the resulting body is empty, rejecting empty or whitespace‑only comments.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "body = body.strip()\nif not body:\n    raise ValueError(\"a comment cannot be empty\")"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 45,
+      "severity": "medium"
+    },
+    {
+      "number": 3,
+      "text": "A comment is at most 2000 characters.",
+      "verdict": "met",
+      "explanation": "MAX_COMMENT is defined as 2000 and the method raises ValueError when the comment length exceeds this limit, enforcing the maximum length.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "MAX_COMMENT = 2000\n...\nif len(body) > MAX_COMMENT:\n    raise ValueError(f\"a comment is at most {MAX_COMMENT} characters\")"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 10,
+      "severity": "medium"
+    },
+    {
+      "number": 4,
+      "text": "A ticket's comments are listed oldest first.",
+      "verdict": "met",
+      "explanation": "The comments method returns comments ordered by id (ascending) via the store, which yields the oldest comments first.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def comments(self, ticket_id: int) -> list[Comment]:\n    \"\"\"Comments of a ticket, oldest first.\"\"\"\n    self.get(ticket_id)\n    return self.store.list_comments(ticket_id)"
+        },
+        {
+          "source": "code",
+          "quote": "rows = self._db.execute(\"SELECT * FROM comments WHERE ticket_id = ? ORDER BY id\", (ticket_id,)).fetchall()"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 52,
+      "severity": "medium"
+    }
+  ],
+  "dismissed": [],
+  "tools": [
+    {
+      "name": "ruff",
+      "version": "0.17.0",
+      "status": "ok",
+      "message": "",
+      "files_checked": 4,
+      "total_findings": 0,
+      "findings_on_changed_lines": 0,
+      "duration_s": 0.77
+    },
+    {
+      "name": "bandit",
+      "version": "1.9.4",
+      "status": "ok",
+      "message": "7 warning(s) in test files were ignored (noise in tests)",
+      "files_checked": 4,
+      "total_findings": 0,
+      "findings_on_changed_lines": 0,
+      "duration_s": 2.38
+    }
+  ],
+  "change_profile": {
+    "files_changed": 4,
+    "lines_added": 87,
+    "lines_removed": 2,
+    "languages": {
+      ".py": 4
+    },
+    "source_files": 3,
+    "test_files": 1,
+    "hints": []
+  },
+  "context": [
+    "`TicketService.add_comment` (tickets/service.py) is called by 0 other repository function(s) and mentioned in 4 test function(s) (4 added or changed by this change).",
+    "`TicketStore.add_comment` (tickets/store.py) is called by 1 other repository function(s) and mentioned in 4 test function(s) (4 added or changed by this change).",
+    "`TicketStore.list_comments` (tickets/store.py) is called by 1 other repository function(s) and mentioned in no test function.",
+    "`TicketService.comments` (tickets/service.py) is called by 0 other repository function(s) and mentioned in 1 test function(s) (1 added or changed by this change).",
+    "`TicketStore.__init__` (tickets/store.py) is called by 0 other repository function(s) and mentioned in 4 test function(s).",
+    "test of `TicketStore.__init__`: tests/test_service.py:9-11 (`service`)",
+    "class of `TicketService.add_comment`: tickets/service.py:18-19 (`TicketService.__init__`)",
+    "callee of `TicketService.add_comment`: tickets/service.py:30-34 (`TicketService.get`)",
+    "test of `TicketStore.__init__`: tests/test_store.py:9-13 (`test_add_and_get_round_trip`)",
+    "callee of `TicketService.add_comment`: tickets/store.py:54-56 (`TicketStore.get`)",
+    "test of `TicketStore.__init__`: tests/test_store.py:16-22 (`test_list_by_status`)"
+  ]
+}

@@ -50,6 +50,21 @@ class SupportingFile(StrictModel):
     content: str
 
 
+class RelatedSnippet(StrictModel):
+    """Code from the repository that is NOT part of the change but shows how the changed code is used or tested.
+
+    Found by name matching (see codegraph.py), so it can point at the wrong function; the model is told so.
+    """
+
+    path: str = Field(min_length=1)
+    start_line: int = Field(ge=1)
+    end_line: int = Field(ge=1)
+    kind: Literal["caller", "callee", "test", "class"]
+    symbol: str  # the changed function this snippet is related to
+    name: str  # the function (or class member) the snippet shows
+    text: str  # the code, WITHOUT line numbers (they are added when it is shown to the model)
+
+
 class ReviewInput(StrictModel):
     """Everything about the code change itself. The ticket is kept separate."""
 
@@ -64,6 +79,9 @@ class ReviewInput(StrictModel):
     # Team coding rules (from the BASE branch, so a PR cannot rewrite its own rules).
     rules: str | None = None
     rules_source: str | None = None  # where the rules came from, for the report
+    # Repository context beyond the diff (callers, callees, tests, class), found at fetch time and saved with the snapshot.
+    related_code: list[RelatedSnippet] = Field(default_factory=list)
+    related_facts: list[str] = Field(default_factory=list)  # plain statements, e.g. "no test mentions `f`"
 
 
 # -------------------------------------------------------------------------- findings
@@ -354,6 +372,7 @@ class ReviewResult(StrictModel):
     dismissed: list[DismissedFinding] = Field(default_factory=list)  # judged unsupported by the verifier
     tools: list[ToolRun] = Field(default_factory=list)  # static-analysis tools that ran (or why not)
     change_profile: ChangeProfile | None = None
+    context: list[str] = Field(default_factory=list)  # repository context that was provided to the model (facts, snippets)
 
     @model_validator(mode="after")
     def _status_matches_content(self) -> Self:

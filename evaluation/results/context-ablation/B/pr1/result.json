@@ -1,0 +1,271 @@
+{
+  "status": "completed",
+  "findings": [
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/service.py",
+      "line": 53,
+      "title": "Rule: public function docstring must describe return or raise",
+      "explanation": "The public method `comments` has a docstring that does not state what the function returns or raises, violating the team rule that public functions must have a one-line docstring describing the return value or raised exceptions.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "\"\"\"Comments of a ticket, oldest first.\"\"\""
+        },
+        {
+          "source": "rules",
+          "quote": "3. Public functions have type hints and a one-line docstring that says what they return or raise."
+        }
+      ],
+      "found_by": [
+        "standards"
+      ],
+      "verification": "supported",
+      "verification_note": "The public method `comments` has a one-line docstring that does not describe its return value, violating team rule 3 which requires such a description.",
+      "source": "llm"
+    },
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/store.py",
+      "line": 87,
+      "title": "Rule: public function docstring must describe return or raise",
+      "explanation": "The public method `list_comments` has a docstring that does not mention what the function returns or raises, violating the team rule requiring such a description.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "\"\"\"Comments of a ticket, oldest first.\"\"\""
+        },
+        {
+          "source": "rules",
+          "quote": "3. Public functions have type hints and a one-line docstring that says what they return or raise."
+        }
+      ],
+      "found_by": [
+        "standards"
+      ],
+      "verification": "supported",
+      "verification_note": "The public method `list_comments` has a one-line docstring that does not describe its return value, violating team rule 3 which requires such a description.",
+      "source": "llm"
+    }
+  ],
+  "limitations": [
+    "The review cannot confirm how comment bodies are later rendered; the XSS risk is inferred from storage of raw input without sanitization."
+  ],
+  "error": null,
+  "run": {
+    "revision": {
+      "repository": "ebirdyx/ticket-system-demo",
+      "pr_number": 1,
+      "url": "https://github.com/ebirdyx/ticket-system-demo/pull/1",
+      "base_sha": "31011419c5a58b58220c9be837409de5616c9a2f",
+      "head_sha": "cdc6d0b435f351dcbe672c331bbda655bf4efc7c"
+    },
+    "case_id": "ebirdyx-ticket-system-demo-pr1-cdc6d0b",
+    "created_at": "2026-10-14T01:47:55+00:00",
+    "prompt_version": "multi_v4",
+    "model": "gpt-oss:120b",
+    "host": "https://ollama.com",
+    "duration_s": 17.108,
+    "prompt_tokens": 33805,
+    "completion_tokens": 6252,
+    "ticket": "TS-1: Comments on tickets"
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [],
+  "problems": [
+    {
+      "finding_index": null,
+      "criterion_index": 2,
+      "kind": "quote_not_found",
+      "message": "Quoted code text was not found in the input: \"MAX_COMMENT = 2000\n...\n        if len(body) > MAX_COMMENT:\n            raise ValueError(f\"a comment is at most {MAX_COMMENT} characters\")\""
+    }
+  ],
+  "duplicates_removed": 0,
+  "pipeline": "multi",
+  "passes": [
+    {
+      "name": "compliance",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 3.41,
+      "prompt_tokens": 7242,
+      "completion_tokens": 1167,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "defects",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 4.51,
+      "prompt_tokens": 6637,
+      "completion_tokens": 1583,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "security",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 4.12,
+      "prompt_tokens": 6571,
+      "completion_tokens": 1315,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "standards",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 3.66,
+      "prompt_tokens": 6644,
+      "completion_tokens": 1388,
+      "findings": 2,
+      "message": ""
+    },
+    {
+      "name": "verify",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.08,
+      "prompt_tokens": 6711,
+      "completion_tokens": 799,
+      "findings": 1,
+      "message": ""
+    }
+  ],
+  "criteria": [
+    {
+      "number": 1,
+      "text": "Any user can add a comment to an existing ticket.",
+      "verdict": "met",
+      "explanation": "The add_comment method does not enforce any author restrictions, allowing any user to add a comment.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def add_comment(self, ticket_id: int, author: str, body: str) -> Comment:"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 42,
+      "severity": "medium"
+    },
+    {
+      "number": 2,
+      "text": "An empty or whitespace-only comment is rejected.",
+      "verdict": "met",
+      "explanation": "The method strips whitespace and raises ValueError when the resulting body is empty, rejecting empty or whitespace‑only comments.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "body = body.strip()\n        if not body:\n            raise ValueError(\"a comment cannot be empty\")"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 45,
+      "severity": "medium"
+    },
+    {
+      "number": 3,
+      "text": "A comment is at most 2000 characters.",
+      "verdict": "met",
+      "explanation": "MAX_COMMENT is defined as 2000 and the method raises ValueError when the comment length exceeds this limit, enforcing the at‑most‑2000‑character rule.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "MAX_COMMENT = 2000\n...\n        if len(body) > MAX_COMMENT:\n            raise ValueError(f\"a comment is at most {MAX_COMMENT} characters\")"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 48,
+      "severity": "medium"
+    },
+    {
+      "number": 4,
+      "text": "A ticket's comments are listed oldest first.",
+      "verdict": "met",
+      "explanation": "The comments method returns results from store.list_comments, which selects rows ordered by id (auto‑increment), ensuring oldest comments appear first.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def comments(self, ticket_id: int) -> list[Comment]:\n        \"\"\"Comments of a ticket, oldest first.\"\"\"\n        self.get(ticket_id)\n        return self.store.list_comments(ticket_id)"
+        },
+        {
+          "source": "code",
+          "quote": "rows = self._db.execute(\"SELECT * FROM comments WHERE ticket_id = ? ORDER BY id\", (ticket_id,)).fetchall()"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 52,
+      "severity": "medium"
+    }
+  ],
+  "dismissed": [
+    {
+      "finding": {
+        "category": "security",
+        "severity": "high",
+        "file": "tickets/service.py",
+        "line": 42,
+        "title": "Stored XSS risk in comment body",
+        "explanation": "User-provided comment bodies are stored unchanged in the database and later may be rendered in HTML without sanitization, allowing an attacker to inject malicious scripts.",
+        "evidence": [
+          {
+            "source": "code",
+            "quote": "def add_comment(self, ticket_id: int, author: str, body: str) -> Comment:\n        \"\"\"Add a comment to an existing ticket. Raises ValueError if it is empty or longer than MAX_COMMENT.\"\"\"\n        self.get(ticket_id)  # raises TicketNotFound\n        body = body.strip()\n        if not body:\n            raise ValueError(\"a comment cannot be empty\")\n        if len(body) > MAX_COMMENT:\n            raise ValueError(f\"a comment is at most {MAX_COMMENT} characters\")\n        return self.store.add_comment(Comment(id=0, ticket_id=ticket_id, author=author, body=body))"
+          },
+          {
+            "source": "code",
+            "quote": "def add_comment(self, comment: Comment) -> Comment:\n        \"\"\"Insert a comment and return it with its new id.\"\"\"\n        cursor = self._db.execute(\n            \"INSERT INTO comments (ticket_id, author, body, created_at) VALUES (?, ?, ?, ?)\",\n            (comment.ticket_id, comment.author, comment.body, comment.created_at.isoformat()),\n        )"
+          }
+        ],
+        "found_by": [
+          "security"
+        ],
+        "verification": null,
+        "verification_note": "",
+        "source": "llm"
+      },
+      "reason": "The code stores comment bodies unchanged, but no evidence is provided that they are later rendered as HTML, so an XSS risk cannot be confirmed from the given material."
+    }
+  ],
+  "tools": [
+    {
+      "name": "ruff",
+      "version": "0.17.0",
+      "status": "ok",
+      "message": "",
+      "files_checked": 4,
+      "total_findings": 0,
+      "findings_on_changed_lines": 0,
+      "duration_s": 0.76
+    },
+    {
+      "name": "bandit",
+      "version": "1.9.4",
+      "status": "ok",
+      "message": "7 warning(s) in test files were ignored (noise in tests)",
+      "files_checked": 4,
+      "total_findings": 0,
+      "findings_on_changed_lines": 0,
+      "duration_s": 2.36
+    }
+  ],
+  "change_profile": {
+    "files_changed": 4,
+    "lines_added": 87,
+    "lines_removed": 2,
+    "languages": {
+      ".py": 4
+    },
+    "source_files": 3,
+    "test_files": 1,
+    "hints": []
+  },
+  "context": []
+}

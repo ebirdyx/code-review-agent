@@ -751,3 +751,63 @@ def test_save_run_without_a_folder_still_works_for_multi_records(tmp_path):
     record, sent, _, _, _, _ = run()
     folder = save_run(record, sent, tmp_path)
     assert (folder / "passes" / "compliance.raw.txt").exists() and (folder / "run.json").exists()
+
+
+# ------------------------------------- merging only when two reports talk about the same thing
+
+
+def with_text(f, title, explanation, quote=None, source=None):
+    from code_review_agent.schemas import Evidence
+
+    update = {"title": title, "explanation": explanation}
+    if quote is not None:
+        update["evidence"] = [Evidence(source="code", quote=quote)]
+    if source:
+        update["source"] = source
+    return f.model_copy(update=update)
+
+
+def test_unrelated_remarks_on_one_line_stay_separate_findings():
+    """Seen on the demo: a speculative security worry and a missing-test rule sat on one line. Merged, the verifier judged
+    one mixed claim and dismissed both, losing the true one."""
+    security = with_text(mk("security", by="security"), "Missing authorization check for escalation",
+                         "Nothing verifies that the caller may escalate tickets.", quote="ticket.priority = next_level")
+    rule = with_text(mk("maintainability", "low", by="standards"), "Rule: every change comes with a boundary test",
+                     "The tests do not cover a ticket exactly 48 hours old.", quote="if now - ticket.created_at > ESCALATION_AGE:")
+    merged, removed = merge_candidates([security, rule])
+    assert len(merged) == 2 and removed == 0
+
+
+def test_different_categories_merge_when_they_quote_the_same_code():
+    a = with_text(mk("security", by="security"), "Alpha", "first wording", quote="query = f'SELECT {x}'")
+    b = with_text(mk("logic_defect", by="defects"), "Beta", "entirely different words", quote="query   =  f'SELECT {x}'")
+    assert len(merge_candidates([a, b])[0]) == 1  # whitespace differences in the quote do not matter
+
+
+def test_different_categories_merge_when_their_wording_is_largely_shared():
+    a = with_text(mk("logic_defect", by="defects"), "Reporter allowed to resolve tickets", "The permission check lets the reporter resolve.", quote="q1")
+    b = with_text(mk("security", by="security"), "Reporter can resolve tickets", "The permission check lets the reporter resolve a ticket.", quote="q2")
+    merged, removed = merge_candidates([a, b])
+    assert len(merged) == 1 and removed == 1
+
+
+def test_a_tool_finding_absorbs_a_model_remark_on_its_line_whatever_the_wording():
+    tool = with_text(mk("security", by="bandit"), "bandit B110: Try, Except, Pass detected.", "reported by a tool", quote="except Exception:", source="tool")
+    model = with_text(mk("error_handling", by="defects"), "Failures vanish", "A failed notification leaves no trace.", quote="pass")
+    merged, _ = merge_candidates([tool, model])
+    assert len(merged) == 1 and merged[0].source == "tool" and merged[0].found_by == ["bandit", "defects"]
+
+
+def test_same_category_on_one_line_still_merges_without_any_text_overlap():
+    a = with_text(mk("logic_defect", by="defects"), "One thing", "alpha beta", quote="q1")
+    b = with_text(mk("logic_defect", by="security"), "Other thing", "gamma delta", quote="q2")
+    assert len(merge_candidates([a, b])[0]) == 1  # unchanged behaviour for equal categories
+
+
+def test_a_criterion_finding_a_few_lines_away_needs_a_shared_subject_too():
+    criterion = with_text(mk("requirement_mismatch", "high", line=41, by="compliance"), "Criterion 1 not met: only the assignee can resolve",
+                          "The assignee check is wrong.", quote="a")
+    same = with_text(mk("logic_defect", "high", line=44, by="defects"), "Assignee check is wrong", "Only the assignee can resolve.", quote="b")
+    other = with_text(mk("logic_defect", "high", line=44, by="defects"), "Typo in the log message", "The message mentions a file.", quote="c")
+    assert len(merge_candidates([criterion, same])[0]) == 1
+    assert len(merge_candidates([criterion, other])[0]) == 2

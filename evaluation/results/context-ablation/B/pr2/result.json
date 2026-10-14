@@ -1,0 +1,287 @@
+{
+  "status": "completed",
+  "findings": [
+    {
+      "category": "boundary_condition",
+      "severity": "medium",
+      "file": "tickets/service.py",
+      "line": 50,
+      "title": "Escalation condition excludes tickets exactly 48 hours old",
+      "explanation": "The acceptance criteria require tickets that have existed for 48 hours or more to be escalated. The code uses a strict greater-than comparison (`> ESCALATION_AGE`), which skips tickets that are exactly 48 hours old, causing them not to be escalated. Also reported by compliance as requirement_mismatch: The code checks `if now - ticket.created_at > ESCALATION_AGE:` which requires the ticket to be older than 48 hours, excluding tickets that are exactly 48 hours old. The acceptance criterion requires escalation for tickets that have existed for 48 hours **or more**, so tickets exactly 48 hours old would not be escalated, violating the requirement.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "if now - ticket.created_at > ESCALATION_AGE:"
+        },
+        {
+          "source": "code",
+          "quote": "ESCALATION_AGE = timedelta(hours=48)"
+        },
+        {
+          "source": "ticket",
+          "quote": "1. An open ticket that has existed for 48 hours or more is raised by one priority level."
+        }
+      ],
+      "found_by": [
+        "compliance",
+        "defects"
+      ],
+      "verification": "supported",
+      "verification_note": "The code checks `if now - ticket.created_at > ESCALATION_AGE:` with `ESCALATION_AGE = timedelta(hours=48)`, which excludes tickets that are exactly 48 hours old, contradicting the acceptance criterion that tickets 48 hours or more must be escalated.",
+      "source": "llm"
+    },
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/service.py",
+      "line": 45,
+      "title": "Rule: every change in behaviour comes with a test, including the boundary values",
+      "explanation": "The new public method `escalate_stale` introduces behaviour that escalates tickets older than 48 hours, but the test suite does not include a test for the exact 48‑hour boundary, violating the team's rule that every behavioural change must be covered by a test including boundary values.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def escalate_stale(self, now: datetime | None = None) -> list[Ticket]:"
+        },
+        {
+          "source": "rules",
+          "quote": "4. Every change in behaviour comes with a test, including the boundary values (for example \"exactly 48 hours\")."
+        }
+      ],
+      "found_by": [
+        "standards"
+      ],
+      "verification": "supported",
+      "verification_note": "The test suite lacks a test for the exact 48‑hour boundary, violating team rule 4 which requires tests for boundary values of new behaviour.",
+      "source": "llm"
+    }
+  ],
+  "limitations": [],
+  "error": null,
+  "run": {
+    "revision": {
+      "repository": "ebirdyx/ticket-system-demo",
+      "pr_number": 2,
+      "url": "https://github.com/ebirdyx/ticket-system-demo/pull/2",
+      "base_sha": "31011419c5a58b58220c9be837409de5616c9a2f",
+      "head_sha": "2ad2b01eaa423cc125af1ff5b0df8781230c15a0"
+    },
+    "case_id": "ebirdyx-ticket-system-demo-pr2-2ad2b01",
+    "created_at": "2026-10-14T01:48:19+00:00",
+    "prompt_version": "multi_v4",
+    "model": "gpt-oss:120b",
+    "host": "https://ollama.com",
+    "duration_s": 17.226,
+    "prompt_tokens": 24736,
+    "completion_tokens": 5998,
+    "ticket": "TS-2: Escalate stale tickets"
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [],
+  "problems": [],
+  "duplicates_removed": 1,
+  "pipeline": "multi",
+  "passes": [
+    {
+      "name": "compliance",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 5.61,
+      "prompt_tokens": 5389,
+      "completion_tokens": 2016,
+      "findings": 2,
+      "message": ""
+    },
+    {
+      "name": "defects",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.33,
+      "prompt_tokens": 4784,
+      "completion_tokens": 657,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "security",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 3.28,
+      "prompt_tokens": 4718,
+      "completion_tokens": 1025,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "standards",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 3.64,
+      "prompt_tokens": 4791,
+      "completion_tokens": 1174,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "verify",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 3.08,
+      "prompt_tokens": 5054,
+      "completion_tokens": 1126,
+      "findings": 2,
+      "message": ""
+    }
+  ],
+  "criteria": [
+    {
+      "number": 1,
+      "text": "An open ticket that has existed for 48 hours or more is raised by one priority level.",
+      "verdict": "not_met",
+      "explanation": "The code checks `if now - ticket.created_at > ESCALATION_AGE:` which requires the ticket to be older than 48 hours, excluding tickets that are exactly 48 hours old. The acceptance criterion requires escalation for tickets that have existed for 48 hours **or more**, so tickets exactly 48 hours old would not be escalated, violating the requirement.",
+      "evidence": [
+        {
+          "source": "ticket",
+          "quote": "1. An open ticket that has existed for 48 hours or more is raised by one priority level."
+        },
+        {
+          "source": "code",
+          "quote": "if now - ticket.created_at > ESCALATION_AGE:"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 50,
+      "severity": "medium"
+    },
+    {
+      "number": 2,
+      "text": "An urgent ticket stays urgent.",
+      "verdict": "met",
+      "explanation": "Urgent tickets are not escalated because the priority index check prevents moving beyond the highest priority (URGENT). The code leaves urgent tickets unchanged, satisfying the criterion.",
+      "evidence": [
+        {
+          "source": "ticket",
+          "quote": "2. An urgent ticket stays urgent."
+        },
+        {
+          "source": "code",
+          "quote": "if index < len(PRIORITY_ORDER) - 1:\n    ticket.priority = PRIORITY_ORDER[index + 1]"
+        },
+        {
+          "source": "code",
+          "quote": "assert service.get(ticket.id).priority is Priority.URGENT"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 51,
+      "severity": "medium"
+    },
+    {
+      "number": 3,
+      "text": "Tickets that are not open (in progress, resolved, closed) are never escalated.",
+      "verdict": "met",
+      "explanation": "The escalation loop iterates only over tickets with status `Status.OPEN`, so tickets that are not open are never considered for escalation, fulfilling the requirement.",
+      "evidence": [
+        {
+          "source": "ticket",
+          "quote": "3. Tickets that are not open (in progress, resolved, closed) are never escalated."
+        },
+        {
+          "source": "code",
+          "quote": "for ticket in self.store.list_by_status(Status.OPEN):"
+        },
+        {
+          "source": "code",
+          "quote": "assert service.escalate_stale(NOW) == []"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 49,
+      "severity": "medium"
+    }
+  ],
+  "dismissed": [
+    {
+      "finding": {
+        "category": "security",
+        "severity": "medium",
+        "file": "tickets/service.py",
+        "line": 45,
+        "title": "Missing authorization check in ticket escalation",
+        "explanation": "The public method `escalate_stale` raises the priority of tickets without verifying that the caller has permission to perform this operation, allowing any caller to arbitrarily increase ticket priority.",
+        "evidence": [
+          {
+            "source": "code",
+            "quote": "def escalate_stale(self, now: datetime | None = None) -> list[Ticket]:\n    \"\"\"Raise the priority of open tickets that are old enough. Returns the tickets that were changed.\"\"\"\n    now = now or datetime.now(UTC)\n    changed = []\n    for ticket in self.store.list_by_status(Status.OPEN):\n        if now - ticket.created_at > ESCALATION_AGE:\n            index = PRIORITY_ORDER.index(ticket.priority)\n            if index < len(PRIORITY_ORDER) - 1:\n                ticket.priority = PRIORITY_ORDER[index + 1]\n                self.store.save(ticket)\n                changed.append(ticket)\n    return changed"
+          }
+        ],
+        "found_by": [
+          "security"
+        ],
+        "verification": null,
+        "verification_note": "",
+        "source": "llm"
+      },
+      "reason": "No rule or requirement in the provided ticket, PR description, or team rules mandates an authorization check for `escalate_stale`, so the claim of a missing permission check is not substantiated."
+    },
+    {
+      "finding": {
+        "category": "requirement_mismatch",
+        "severity": "low",
+        "file": "tickets/service.py",
+        "line": 45,
+        "title": "Method returns list of changed tickets, which was not specified",
+        "explanation": "The ticket and PR description only require that open tickets older than 48 hours have their priority raised. The implementation returns a list of the tickets that were changed, a behavior that was not requested.",
+        "evidence": [
+          {
+            "source": "code",
+            "quote": "def escalate_stale(self, now: datetime | None = None) -> list[Ticket]:\n    \"\"\"Raise the priority of open tickets that are old enough. Returns the tickets that were changed.\"\"\"\n    ...\n    return changed"
+          }
+        ],
+        "found_by": [
+          "compliance"
+        ],
+        "verification": null,
+        "verification_note": "",
+        "source": "llm"
+      },
+      "reason": "The ticket and PR description do not specify a return value, but returning a list of changed tickets is not prohibited and does not conflict with the stated requirements."
+    }
+  ],
+  "tools": [
+    {
+      "name": "ruff",
+      "version": "0.17.0",
+      "status": "ok",
+      "message": "",
+      "files_checked": 2,
+      "total_findings": 0,
+      "findings_on_changed_lines": 0,
+      "duration_s": 0.84
+    },
+    {
+      "name": "bandit",
+      "version": "1.9.4",
+      "status": "ok",
+      "message": "12 warning(s) in test files were ignored (noise in tests)",
+      "files_checked": 2,
+      "total_findings": 0,
+      "findings_on_changed_lines": 0,
+      "duration_s": 2.38
+    }
+  ],
+  "change_profile": {
+    "files_changed": 2,
+    "lines_added": 53,
+    "lines_removed": 0,
+    "languages": {
+      ".py": 2
+    },
+    "source_files": 1,
+    "test_files": 1,
+    "hints": []
+  },
+  "context": []
+}

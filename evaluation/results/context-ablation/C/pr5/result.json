@@ -1,0 +1,248 @@
+{
+  "status": "completed",
+  "findings": [
+    {
+      "category": "security",
+      "severity": "medium",
+      "file": "tickets/service.py",
+      "line": 45,
+      "title": "bandit B110: Try, Except, Pass detected.",
+      "explanation": "Try, Except, Pass detected. (reported by the static-analysis tool bandit, rule B110; a deterministic check, not a model's opinion). Also reported by ruff as error_handling: Do not catch blind exception: `Exception` (reported by the static-analysis tool ruff, rule BLE001; a deterministic check, not a model's opinion). Also reported by compliance as requirement_mismatch: The code silently swallows notification failures without logging them, so a failed notification is not recorded for operators. Also reported by standards as maintainability: The code catches a broad Exception and silently ignores it with pass, violating the team rule that exceptions must not be silenced.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "except Exception:"
+        },
+        {
+          "source": "ticket",
+          "quote": "A failed notification is logged so that operators can see it."
+        },
+        {
+          "source": "code",
+          "quote": "except Exception:\n                pass"
+        },
+        {
+          "source": "rules",
+          "quote": "Never silence an exception: catch the narrowest type, and log or re-raise it. `except Exception: pass` is not allowed."
+        }
+      ],
+      "found_by": [
+        "ruff",
+        "bandit",
+        "compliance",
+        "standards"
+      ],
+      "verification": null,
+      "verification_note": "",
+      "source": "tool"
+    },
+    {
+      "category": "error_handling",
+      "severity": "medium",
+      "file": "tickets/service.py",
+      "line": 42,
+      "title": "Failed notification is silently ignored without logging",
+      "explanation": "When the notifier raises an exception, the code catches a broad Exception and does nothing (`pass`). The ticket's acceptance criteria require that a failed notification be logged so operators can see it. Swallowing the exception without logging hides the failure and makes debugging impossible.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "if self.notifier:\n    try:\n        self.notifier(assignee, f\"Ticket {ticket.id} was assigned to you: {ticket.title}\")\n    except Exception:\n        pass"
+        },
+        {
+          "source": "ticket",
+          "quote": "A failed notification is logged so that operators can see it."
+        }
+      ],
+      "found_by": [
+        "defects"
+      ],
+      "verification": "supported",
+      "verification_note": "The assign method catches any Exception from the notifier and does a bare `pass` without logging, while the ticket acceptance criteria require that a failed notification be logged for operators.",
+      "source": "llm"
+    }
+  ],
+  "limitations": [
+    "The security impact of the provided notifier callable cannot be fully assessed without seeing its implementation; if it performs unsafe operations with the message containing user-controlled ticket.title, potential injection risks could exist."
+  ],
+  "error": null,
+  "run": {
+    "revision": {
+      "repository": "ebirdyx/ticket-system-demo",
+      "pr_number": 5,
+      "url": "https://github.com/ebirdyx/ticket-system-demo/pull/5",
+      "base_sha": "31011419c5a58b58220c9be837409de5616c9a2f",
+      "head_sha": "0d0a778a1e05c43e2194a590c7b05c1925095f28"
+    },
+    "case_id": "ebirdyx-ticket-system-demo-pr5-0d0a778",
+    "created_at": "2026-10-14T01:47:09+00:00",
+    "prompt_version": "multi_v4",
+    "model": "gpt-oss:120b",
+    "host": "https://ollama.com",
+    "duration_s": 14.706,
+    "prompt_tokens": 24328,
+    "completion_tokens": 4099,
+    "ticket": "TS-5: Notify the assignee on assignment"
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [],
+  "problems": [],
+  "duplicates_removed": 3,
+  "pipeline": "multi",
+  "passes": [
+    {
+      "name": "compliance",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 4.17,
+      "prompt_tokens": 5419,
+      "completion_tokens": 1238,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "defects",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 4.34,
+      "prompt_tokens": 4814,
+      "completion_tokens": 1196,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "security",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.88,
+      "prompt_tokens": 4748,
+      "completion_tokens": 525,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "standards",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.44,
+      "prompt_tokens": 4821,
+      "completion_tokens": 814,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "verify",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 1.59,
+      "prompt_tokens": 4526,
+      "completion_tokens": 326,
+      "findings": 0,
+      "message": ""
+    }
+  ],
+  "criteria": [
+    {
+      "number": 1,
+      "text": "When a ticket is assigned, the new assignee is notified.",
+      "verdict": "met",
+      "explanation": "The assign method calls the notifier when a notifier is provided, and the test verifies that a notification is sent after assignment.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "self.notifier(assignee, f\"Ticket {ticket.id} was assigned to you: {ticket.title}\")"
+        },
+        {
+          "source": "code",
+          "quote": "assert sent == [(\"bob\", f\"Ticket {ticket.id} was assigned to you: Printer jams\")]"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 44,
+      "severity": "medium"
+    },
+    {
+      "number": 2,
+      "text": "If the notification fails, the assignment still succeeds.",
+      "verdict": "met",
+      "explanation": "The assign method catches any exception from the notifier and still returns the ticket with the new assignee, as confirmed by the test that simulates a failing notifier.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "except Exception:\n                pass"
+        },
+        {
+          "source": "code",
+          "quote": "assert service.assign(ticket.id, \"bob\").assignee == \"bob\""
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 45,
+      "severity": "medium"
+    },
+    {
+      "number": 3,
+      "text": "A failed notification is logged so that operators can see it.",
+      "verdict": "not_met",
+      "explanation": "The code silently swallows notification failures without logging them, so a failed notification is not recorded for operators.",
+      "evidence": [
+        {
+          "source": "ticket",
+          "quote": "A failed notification is logged so that operators can see it."
+        },
+        {
+          "source": "code",
+          "quote": "except Exception:\n                pass"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 45,
+      "severity": "medium"
+    }
+  ],
+  "dismissed": [],
+  "tools": [
+    {
+      "name": "ruff",
+      "version": "0.17.0",
+      "status": "ok",
+      "message": "",
+      "files_checked": 2,
+      "total_findings": 1,
+      "findings_on_changed_lines": 1,
+      "duration_s": 0.8
+    },
+    {
+      "name": "bandit",
+      "version": "1.9.4",
+      "status": "ok",
+      "message": "8 warning(s) in test files were ignored (noise in tests)",
+      "files_checked": 2,
+      "total_findings": 1,
+      "findings_on_changed_lines": 1,
+      "duration_s": 2.34
+    }
+  ],
+  "change_profile": {
+    "files_changed": 2,
+    "lines_added": 27,
+    "lines_removed": 1,
+    "languages": {
+      ".py": 2
+    },
+    "source_files": 1,
+    "test_files": 1,
+    "hints": []
+  },
+  "context": [
+    "`TicketService.assign` (tickets/service.py) is called by 0 other repository function(s) and mentioned in 3 test function(s) (2 added or changed by this change).",
+    "`TicketService.__init__` (tickets/service.py) is called by 0 other repository function(s) and mentioned in 3 test function(s) (2 added or changed by this change).",
+    "test of `TicketService.assign`: tests/test_service.py:32-35 (`test_assign_persists`)",
+    "test of `TicketService.__init__`: tests/test_service.py:9-11 (`service`)",
+    "callee of `TicketService.assign`: tickets/service.py:32-36 (`TicketService.get`)",
+    "callee of `TicketService.assign`: tickets/store.py:42-44 (`TicketStore.get`)",
+    "callee of `TicketService.assign`: tickets/store.py:46-51 (`TicketStore.save`)"
+  ]
+}

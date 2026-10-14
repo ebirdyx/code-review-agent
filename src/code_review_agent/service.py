@@ -35,15 +35,16 @@ class PRFetchOptions:
     with_source: bool = True
     with_analysis: bool = True  # also download full changed Python files for the static-analysis tools
     with_rules: bool = True  # read team rules from the base commit
+    with_context: bool = True  # build the code graph (callers, callees, tests) from one repository download
 
     @classmethod
     def from_cli(cls, jira=False, jira_projects: str | None = None, ticket_keys=None, ticket_file=None,
-                 max_files=100, no_source=False, no_tools=False) -> PRFetchOptions:
+                 max_files=100, no_source=False, no_tools=False, no_context=False) -> PRFetchOptions:
         raw = jira_projects or os.environ.get(PROJECTS_ENV, "")
         return cls(
             jira=jira, jira_projects=[p.strip() for p in raw.split(",") if p.strip()],
             ticket_keys=ticket_keys, ticket_file=ticket_file, max_files=max_files, with_source=not no_source,
-            with_analysis=not no_tools,
+            with_analysis=not no_tools, with_context=not no_context,
         )
 
 
@@ -71,12 +72,13 @@ def fetch_snapshot(
     with events.step("fetch_pr", f"Reading {repository}#{number} from GitHub", repository=repository, number=number) as info:
         snapshot = github().fetch_pull_request(
             repository, number, max_files=options.max_files, with_source=options.with_source,
-            with_analysis=options.with_analysis, with_rules=options.with_rules,
+            with_analysis=options.with_analysis, with_rules=options.with_rules, with_context=options.with_context,
         )
         meta = snapshot.metadata
         info.update(head_sha=meta.head_sha, files=snapshot.diff.count("diff --git"),
                     source_files=len(snapshot.supporting_files), analysis_files=len(snapshot.analysis_files),
-                    team_rules=bool(snapshot.rules), not_retrieved=len(snapshot.notes))
+                    team_rules=bool(snapshot.rules), not_retrieved=len(snapshot.notes),
+                    related_snippets=len(snapshot.related_code))
     for note in snapshot.notes:
         events.emit("fetch_pr", note, status="warn")
 
@@ -143,13 +145,15 @@ def review_folder(
     tools: tuple[str, ...] | list[str] = DEFAULT_TOOLS,
     ruff_select: str = RUFF_SELECT,
     rules_file: Path | None = None,
+    use_context: bool = True,
 ) -> tuple[Path, ReviewResult, str]:
     """Review one example folder (a local example or a downloaded PR) and save everything.
 
     pipeline "multi": static analysis, specialist passes (compliance, defects, security, team rules)
                       and a verifier.
     pipeline "single": one model call with one prompt (the baseline used for the first evaluation).
-    `rules_file` overrides the team rules found in the folder (local use).
+    `rules_file` overrides the team rules found in the folder (local use). `use_context=False` ignores the saved
+    repository context (callers, callees, tests), to measure what it adds.
     """
     if pipeline not in ("single", "multi"):
         raise ValueError(f"Unknown pipeline '{pipeline}' (choose single or multi)")
@@ -160,6 +164,8 @@ def review_folder(
         if rules_file is not None:
             review_input = review_input.model_copy(
                 update={"rules": rules_file.read_text(encoding="utf-8"), "rules_source": str(rules_file)})
+        if not use_context:
+            review_input = review_input.model_copy(update={"related_code": [], "related_facts": []})
         info.update(ticket=ticket.key if ticket else None, diff_lines=len(review_input.diff.splitlines()),
                     supporting_files=len(review_input.supporting_files), analysis_files=len(review_input.analysis_files),
                     team_rules=bool(review_input.rules))

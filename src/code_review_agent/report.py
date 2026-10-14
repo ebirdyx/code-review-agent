@@ -100,6 +100,12 @@ def render_markdown(result: ReviewResult) -> str:
                 f"({prof.source_files} source, {prof.test_files} test); file types: {_line(langs)}."]
         out += [f"- {_line(h)}" for h in prof.hints] + [""]
 
+    # --- repository context that was provided (callers, callees, tests)
+    if result.context:
+        out += ["## Repository context", "",
+                "Code outside the change that the model was shown, found by matching function names (it can match the wrong function).", ""]
+        out += [f"- {_line(c)}" for c in result.context] + [""]
+
     # --- static-analysis tools
     if result.tools:
         out += ["## Automated checks (static analysis)", "",

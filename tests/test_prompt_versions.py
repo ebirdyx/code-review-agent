@@ -77,11 +77,11 @@ def test_revalidate_uses_the_prompt_version_of_the_run(tmp_path):
 # ---------------------------------------------------------------------------- multi_v3
 
 
-def test_multi_v3_is_the_default_and_v2_stays_loadable_and_unchanged():
+def test_v2_and_v3_stay_loadable_and_v2_is_unchanged():
     from code_review_agent.pipeline import MULTI_PROMPT_VERSION, available_multi_versions, load_pass_system
 
-    assert MULTI_PROMPT_VERSION == "multi_v3"
-    assert {"multi_v1", "multi_v2", "multi_v3"} <= set(available_multi_versions())
+    assert MULTI_PROMPT_VERSION == "multi_v4"  # the default is the newest set
+    assert {"multi_v1", "multi_v2", "multi_v3", "multi_v4"} <= set(available_multi_versions())
     # Old runs must stay reproducible: the new guidance exists only in v3.
     assert "satisfies the rule in substance" not in load_pass_system("multi_v2", "standards")
     assert "Vague criteria" not in load_pass_system("multi_v2", "compliance")
@@ -99,3 +99,19 @@ def test_multi_v3_adds_the_three_guidance_texts_and_keeps_the_rest():
     assert "Never answer that a candidate is outside your scope" in verify and "CANDIDATE FINDINGS" in verify
     for name in ("compliance", "defects", "security"):
         assert '"rules"' not in load_pass_system("multi_v3", name), name  # only the standards pass may cite rules
+
+
+# ---------------------------------------------------------------------------- multi_v4 (repository context)
+
+
+def test_multi_v4_describes_the_related_code_block_and_v3_does_not():
+    from code_review_agent.pipeline import load_pass_system
+
+    for name in ("compliance", "defects", "security", "standards", "verify"):
+        v4, v3 = load_pass_system("multi_v4", name), load_pass_system("multi_v3", name)
+        assert "`RELATED CODE`" in v4 and "RELATED CODE" not in v3, name
+        assert "matching function names" in v4 and "Three further blocks" in v4, name
+    # everything v3 added is still there in v4
+    assert "satisfies the rule in substance" in load_pass_system("multi_v4", "standards")
+    assert "Vague criteria" in load_pass_system("multi_v4", "compliance")
+    assert "Never answer that a candidate is outside your scope" in load_pass_system("multi_v4", "verify")

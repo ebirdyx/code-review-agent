@@ -1,0 +1,274 @@
+{
+  "status": "completed",
+  "findings": [
+    {
+      "category": "logic_defect",
+      "severity": "medium",
+      "file": "tickets/store.py",
+      "line": 38,
+      "title": "Missing foreign key enforcement for comments",
+      "explanation": "The SQLite database is created without enabling foreign key constraints, so inserting a comment with a non‑existent ticket_id will succeed. This can corrupt data integrity because comments may reference tickets that do not exist, even though the service layer checks for ticket existence.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "self._db = sqlite3.connect(path)\nself._db.row_factory = sqlite3.Row\nself._db.execute(SCHEMA)\nself._db.execute(COMMENTS_SCHEMA)"
+        },
+        {
+          "source": "code",
+          "quote": "\"INSERT INTO comments (ticket_id, author, body, created_at) VALUES (?, ?, ?, ?)\""
+        }
+      ],
+      "found_by": [
+        "defects"
+      ],
+      "verification": "supported",
+      "verification_note": "SQLite connection is created without enabling foreign key constraints, so the foreign key in COMMENTS_SCHEMA is not enforced.",
+      "source": "llm"
+    },
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/store.py",
+      "line": 88,
+      "title": "Rule: public functions have type hints and a one-line docstring that says what they return or raise",
+      "explanation": "The `list_comments` method's docstring does not specify its return value (a list of Comment objects), which breaches the rule requiring docstrings to state what the function returns.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "\"\"\"Comments of a ticket, oldest first.\"\"\""
+        },
+        {
+          "source": "rules",
+          "quote": "Public functions have type hints and a one-line docstring that says what they return or raise."
+        }
+      ],
+      "found_by": [
+        "standards"
+      ],
+      "verification": "supported",
+      "verification_note": "list_comments has a one-line docstring that does not describe its return value, violating the rule requiring such a description.",
+      "source": "llm"
+    }
+  ],
+  "limitations": [
+    "The codebase does not include the part that renders comments to users, so the actual XSS impact depends on whether the output is escaped."
+  ],
+  "error": null,
+  "run": {
+    "revision": {
+      "repository": "ebirdyx/ticket-system-demo",
+      "pr_number": 1,
+      "url": "https://github.com/ebirdyx/ticket-system-demo/pull/1",
+      "base_sha": "31011419c5a58b58220c9be837409de5616c9a2f",
+      "head_sha": "cdc6d0b435f351dcbe672c331bbda655bf4efc7c"
+    },
+    "case_id": "ebirdyx-ticket-system-demo-pr1-cdc6d0b",
+    "created_at": "2026-10-14T01:50:11+00:00",
+    "prompt_version": "multi_v4",
+    "model": "gpt-oss:120b",
+    "host": "https://ollama.com",
+    "duration_s": 23.294,
+    "prompt_tokens": 33492,
+    "completion_tokens": 8533,
+    "ticket": "TS-1: Comments on tickets"
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [],
+  "problems": [],
+  "duplicates_removed": 1,
+  "pipeline": "multi",
+  "passes": [
+    {
+      "name": "compliance",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.97,
+      "prompt_tokens": 7167,
+      "completion_tokens": 1352,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "defects",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 8.7,
+      "prompt_tokens": 6562,
+      "completion_tokens": 3102,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "security",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 3.55,
+      "prompt_tokens": 6496,
+      "completion_tokens": 1080,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "standards",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 4.06,
+      "prompt_tokens": 6569,
+      "completion_tokens": 1512,
+      "findings": 3,
+      "message": ""
+    },
+    {
+      "name": "verify",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 4.67,
+      "prompt_tokens": 6698,
+      "completion_tokens": 1487,
+      "findings": 2,
+      "message": ""
+    }
+  ],
+  "criteria": [
+    {
+      "number": 1,
+      "text": "Any user can add a comment to an existing ticket.",
+      "verdict": "met",
+      "explanation": "The add_comment method accepts any author string and does not enforce permission checks, allowing any user to add a comment to an existing ticket.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def add_comment(self, ticket_id: int, author: str, body: str) -> Comment:"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 42,
+      "severity": "medium"
+    },
+    {
+      "number": 2,
+      "text": "An empty or whitespace-only comment is rejected.",
+      "verdict": "met",
+      "explanation": "The implementation strips whitespace and raises ValueError when the resulting body is empty, rejecting empty or whitespace‑only comments.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "if not body:\n    raise ValueError(\"a comment cannot be empty\")"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 45,
+      "severity": "medium"
+    },
+    {
+      "number": 3,
+      "text": "A comment is at most 2000 characters.",
+      "verdict": "met",
+      "explanation": "MAX_COMMENT is defined as 2000 and the add_comment method raises ValueError when the comment length exceeds this limit, enforcing the maximum length.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "if len(body) > MAX_COMMENT:\n    raise ValueError(f\"a comment is at most {MAX_COMMENT} characters\")"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 48,
+      "severity": "medium"
+    },
+    {
+      "number": 4,
+      "text": "A ticket's comments are listed oldest first.",
+      "verdict": "met",
+      "explanation": "The comments method returns results from store.list_comments, which queries comments ordered by id (auto‑increment), ensuring oldest‑first ordering.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def comments(self, ticket_id: int) -> list[Comment]:\n    \"\"\"Comments of a ticket, oldest first.\"\"\"\n    self.get(ticket_id)\n    return self.store.list_comments(ticket_id)"
+        },
+        {
+          "source": "code",
+          "quote": "SELECT * FROM comments WHERE ticket_id = ? ORDER BY id"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 52,
+      "severity": "medium"
+    }
+  ],
+  "dismissed": [
+    {
+      "finding": {
+        "category": "security",
+        "severity": "high",
+        "file": "tickets/service.py",
+        "line": 50,
+        "title": "Stored XSS risk due to unsanitized comment body",
+        "explanation": "User-provided comment body is stored and later may be rendered without HTML escaping, allowing injection of malicious scripts.",
+        "evidence": [
+          {
+            "source": "code",
+            "quote": "return self.store.add_comment(Comment(id=0, ticket_id=ticket_id, author=author, body=body))"
+          },
+          {
+            "source": "code",
+            "quote": "def add_comment(self, comment: Comment) -> Comment:\n        \"\"\"Insert a comment and return it with its new id.\"\"\"\n        cursor = self._db.execute(\n            \"INSERT INTO comments (ticket_id, author, body, created_at) VALUES (?, ?, ?, ?)\",\n            (comment.ticket_id, comment.author, comment.body, comment.created_at.isoformat()),\n        )"
+          }
+        ],
+        "found_by": [
+          "security"
+        ],
+        "verification": null,
+        "verification_note": "",
+        "source": "llm"
+      },
+      "reason": "The code only stores the comment body; no rendering logic is provided to confirm an XSS risk."
+    },
+    {
+      "finding": {
+        "category": "maintainability",
+        "severity": "low",
+        "file": "tickets/service.py",
+        "line": 43,
+        "title": "Rule: public functions have type hints and a one-line docstring that says what they return or raise",
+        "explanation": "The `add_comment` method has a one-line docstring that mentions the raised exception but does not state what the function returns, violating the rule that public functions must have a docstring describing their return value or raised exceptions.",
+        "evidence": [
+          {
+            "source": "code",
+            "quote": "\"\"\"Add a comment to an existing ticket. Raises ValueError if it is empty or longer than MAX_COMMENT.\"\"\""
+          },
+          {
+            "source": "rules",
+            "quote": "Public functions have type hints and a one-line docstring that says what they return or raise."
+          },
+          {
+            "source": "code",
+            "quote": "\"\"\"Comments of a ticket, oldest first.\"\"\""
+          }
+        ],
+        "found_by": [
+          "standards"
+        ],
+        "verification": null,
+        "verification_note": "",
+        "source": "llm"
+      },
+      "reason": "The docstring for add_comment mentions the raised exception, satisfying the rule that a docstring must state what is returned or raised."
+    }
+  ],
+  "tools": [],
+  "change_profile": {
+    "files_changed": 4,
+    "lines_added": 87,
+    "lines_removed": 2,
+    "languages": {
+      ".py": 4
+    },
+    "source_files": 3,
+    "test_files": 1,
+    "hints": []
+  },
+  "context": []
+}

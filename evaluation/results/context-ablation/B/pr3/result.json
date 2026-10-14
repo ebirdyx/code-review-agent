@@ -1,0 +1,234 @@
+{
+  "status": "completed",
+  "findings": [
+    {
+      "category": "security",
+      "severity": "high",
+      "file": "tickets/store.py",
+      "line": 65,
+      "title": "bandit B608: Possible SQL injection vector through string-based query construction.",
+      "explanation": "Possible SQL injection vector through string-based query construction. (reported by the static-analysis tool bandit, rule B608; a deterministic check, not a model's opinion). Also reported by defects as boundary_condition: The `search_assignee` method builds the SQL statement using an f-string with the raw lower‑cased name. If the provided name contains a single quote (or other SQL‑special characters), the resulting query becomes syntactically invalid, causing a runtime database error instead of returning an empty list. Also reported by standards as maintainability: The method `search_assignee` constructs an SQL query using an f‑string, which violates the rule that SQL must be built with bound parameters. This breaks the coding standard and can lead to injection issues.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "query = f\"SELECT * FROM tickets WHERE LOWER(assignee) = '{name.lower()}' ORDER BY id\""
+        },
+        {
+          "source": "rules",
+          "quote": "All SQL uses bound parameters (`?`). Never build SQL with f-strings, `%` or `+`."
+        }
+      ],
+      "found_by": [
+        "bandit",
+        "defects",
+        "security",
+        "standards"
+      ],
+      "verification": null,
+      "verification_note": "",
+      "source": "tool"
+    },
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/store.py",
+      "line": 64,
+      "title": "Rule: Public functions have type hints and a one-line docstring that says what they return or raise.",
+      "explanation": "The public method `search_assignee` lacks a docstring, violating the rule that public functions must include a one‑line docstring describing the return value or raised exceptions.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def search_assignee(self, name: str) -> list[Ticket]:"
+        },
+        {
+          "source": "rules",
+          "quote": "Public functions have type hints and a one-line docstring that says what they return or raise."
+        }
+      ],
+      "found_by": [
+        "standards"
+      ],
+      "verification": "supported",
+      "verification_note": "The public method `search_assignee` in tickets/store.py has type hints but no docstring, violating the rule that public functions must include a one‑line docstring describing return or raised exceptions.",
+      "source": "llm"
+    }
+  ],
+  "limitations": [],
+  "error": null,
+  "run": {
+    "revision": {
+      "repository": "ebirdyx/ticket-system-demo",
+      "pr_number": 3,
+      "url": "https://github.com/ebirdyx/ticket-system-demo/pull/3",
+      "base_sha": "31011419c5a58b58220c9be837409de5616c9a2f",
+      "head_sha": "60559c2aa26af2ffe8c6ccc9751feffc69e96237"
+    },
+    "case_id": "ebirdyx-ticket-system-demo-pr3-60559c2",
+    "created_at": "2026-10-14T01:48:43+00:00",
+    "prompt_version": "multi_v4",
+    "model": "gpt-oss:120b",
+    "host": "https://ollama.com",
+    "duration_s": 15.898,
+    "prompt_tokens": 24035,
+    "completion_tokens": 5033,
+    "ticket": "TS-3: Search tickets by assignee"
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [],
+  "problems": [],
+  "duplicates_removed": 3,
+  "pipeline": "multi",
+  "passes": [
+    {
+      "name": "compliance",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 3.97,
+      "prompt_tokens": 5360,
+      "completion_tokens": 1235,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "defects",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 3.83,
+      "prompt_tokens": 4755,
+      "completion_tokens": 1168,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "security",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.58,
+      "prompt_tokens": 4689,
+      "completion_tokens": 639,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "standards",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 4.88,
+      "prompt_tokens": 4762,
+      "completion_tokens": 1627,
+      "findings": 2,
+      "message": ""
+    },
+    {
+      "name": "verify",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 1.33,
+      "prompt_tokens": 4469,
+      "completion_tokens": 364,
+      "findings": 0,
+      "message": ""
+    }
+  ],
+  "criteria": [
+    {
+      "number": 1,
+      "text": "Tickets can be found by the name of their assignee.",
+      "verdict": "met",
+      "explanation": "The service adds a `find_by_assignee` method that queries the store for tickets with the given assignee name, and a test confirms that a ticket can be retrieved by its assignee.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def find_by_assignee(self, name: str) -> list[Ticket]:\n    \"\"\"Tickets assigned to `name` (case does not matter); empty if nobody matches.\"\"\"\n    return self.store.search_assignee(name.strip())"
+        },
+        {
+          "source": "code",
+          "quote": "def search_assignee(self, name: str) -> list[Ticket]:\n    query = f\"SELECT * FROM tickets WHERE LOWER(assignee) = '{name.lower()}' ORDER BY id\"\n    rows = self._db.execute(query).fetchall()\n    return [_from_row(r) for r in rows]"
+        },
+        {
+          "source": "code",
+          "quote": "assert [t.id for t in service.find_by_assignee(\"bOb\")] == [mine.id]"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 41,
+      "severity": "medium"
+    },
+    {
+      "number": 2,
+      "text": "The match ignores upper and lower case.",
+      "verdict": "met",
+      "explanation": "The search query lowercases both the stored assignee and the input name, making the match case‑insensitive, and the test verifies that different capitalizations are treated as equal.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "query = f\"SELECT * FROM tickets WHERE LOWER(assignee) = '{name.lower()}' ORDER BY id\""
+        },
+        {
+          "source": "code",
+          "quote": "assert [t.id for t in service.find_by_assignee(\"bOb\")] == [mine.id]"
+        }
+      ],
+      "file": "tickets/store.py",
+      "line": 65,
+      "severity": "medium"
+    },
+    {
+      "number": 3,
+      "text": "When nobody matches, the result is an empty list.",
+      "verdict": "met",
+      "explanation": "When the search yields no rows, `search_assignee` returns an empty list, and the test asserts that calling `find_by_assignee` with a non‑existent name returns `[]`.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "return [_from_row(r) for r in rows]"
+        },
+        {
+          "source": "code",
+          "quote": "assert service.find_by_assignee(\"nobody\") == []"
+        }
+      ],
+      "file": "tickets/store.py",
+      "line": 67,
+      "severity": "medium"
+    }
+  ],
+  "dismissed": [],
+  "tools": [
+    {
+      "name": "ruff",
+      "version": "0.17.0",
+      "status": "ok",
+      "message": "",
+      "files_checked": 3,
+      "total_findings": 0,
+      "findings_on_changed_lines": 0,
+      "duration_s": 0.81
+    },
+    {
+      "name": "bandit",
+      "version": "1.9.4",
+      "status": "ok",
+      "message": "7 warning(s) in test files were ignored (noise in tests)",
+      "files_checked": 3,
+      "total_findings": 1,
+      "findings_on_changed_lines": 1,
+      "duration_s": 2.38
+    }
+  ],
+  "change_profile": {
+    "files_changed": 3,
+    "lines_added": 23,
+    "lines_removed": 0,
+    "languages": {
+      ".py": 3
+    },
+    "source_files": 2,
+    "test_files": 1,
+    "hints": []
+  },
+  "context": []
+}

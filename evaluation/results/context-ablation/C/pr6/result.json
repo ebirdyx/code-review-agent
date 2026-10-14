@@ -1,0 +1,213 @@
+{
+  "status": "completed",
+  "findings": [
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/service.py",
+      "line": 43,
+      "title": "Rule: public functions must have docstring describing return or raise",
+      "explanation": "The public method `set_due_date` has a one-line docstring that does not state what the function returns or raises, violating the rule that public functions must have a docstring describing their return value or raised exceptions.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def set_due_date(self, ticket_id: int, due: date | None) -> Ticket:\n    \"\"\"Set or clear the due date of a ticket.\"\"\"\n    ticket = self.get(ticket_id)\n    ticket.due_date = due\n    self.store.save(ticket)\n    return ticket"
+        },
+        {
+          "source": "rules",
+          "quote": "Public functions have type hints and a one-line docstring that says what they return or raise."
+        },
+        {
+          "source": "code",
+          "quote": "def overdue(self, today: date | None = None) -> list[Ticket]:\n    \"\"\"Tickets whose due date has passed and that are not closed.\"\"\"\n    today = today or date.today()\n    return [\n        t for status in (Status.OPEN, Status.IN_PROGRESS, Status.RESOLVED)\n        for t in self.store.list_by_status(status)\n        if t.due_date is not None and t.due_date < today\n    ]"
+        }
+      ],
+      "found_by": [
+        "standards"
+      ],
+      "verification": "supported",
+      "verification_note": "The public method `set_due_date` has a one-line docstring that does not mention its return value or possible exceptions, violating rule 3 which requires such a docstring.",
+      "source": "llm"
+    }
+  ],
+  "limitations": [
+    "The code does not include tests for the boundary condition where a ticket's due_date is exactly equal to the 'today' parameter; cannot assess if this edge case is handled correctly.",
+    "The review does not include any information about authentication or authorization mechanisms surrounding the TicketService methods, so potential missing permission checks cannot be fully assessed."
+  ],
+  "error": null,
+  "run": {
+    "revision": {
+      "repository": "ebirdyx/ticket-system-demo",
+      "pr_number": 6,
+      "url": "https://github.com/ebirdyx/ticket-system-demo/pull/6",
+      "base_sha": "31011419c5a58b58220c9be837409de5616c9a2f",
+      "head_sha": "41791e15375771ff4d2504ca8e5d5069f947a340"
+    },
+    "case_id": "ebirdyx-ticket-system-demo-pr6-41791e1",
+    "created_at": "2026-10-14T01:47:32+00:00",
+    "prompt_version": "multi_v4",
+    "model": "gpt-oss:120b",
+    "host": "https://ollama.com",
+    "duration_s": 15.427,
+    "prompt_tokens": 38486,
+    "completion_tokens": 5027,
+    "ticket": "TS-6: Due dates and overdue tickets"
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [],
+  "problems": [],
+  "duplicates_removed": 1,
+  "pipeline": "multi",
+  "passes": [
+    {
+      "name": "compliance",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.92,
+      "prompt_tokens": 8229,
+      "completion_tokens": 715,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "defects",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 4.99,
+      "prompt_tokens": 7624,
+      "completion_tokens": 1615,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "security",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 3.58,
+      "prompt_tokens": 7558,
+      "completion_tokens": 991,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "standards",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 3.36,
+      "prompt_tokens": 7631,
+      "completion_tokens": 1285,
+      "findings": 2,
+      "message": ""
+    },
+    {
+      "name": "verify",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 1.28,
+      "prompt_tokens": 7444,
+      "completion_tokens": 421,
+      "findings": 0,
+      "message": ""
+    }
+  ],
+  "criteria": [
+    {
+      "number": 1,
+      "text": "A ticket can have an optional due date.",
+      "verdict": "met",
+      "explanation": "The Ticket model includes an optional due_date field and the service provides a method to set or clear it, satisfying the optional due date requirement.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "due_date: date | None = None"
+        },
+        {
+          "source": "code",
+          "quote": "def set_due_date(self, ticket_id: int, due: date | None) -> Ticket:"
+        }
+      ],
+      "file": "tickets/models.py",
+      "line": 34,
+      "severity": "medium"
+    },
+    {
+      "number": 2,
+      "text": "Overdue tickets are flagged.",
+      "verdict": "met",
+      "explanation": "The overdue method returns tickets whose due date has passed and are not closed, and a test verifies that overdue tickets are correctly listed.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def overdue(self, today: date | None = None) -> list[Ticket]:"
+        },
+        {
+          "source": "code",
+          "quote": "if t.due_date is not None and t.due_date < today"
+        },
+        {
+          "source": "code",
+          "quote": "assert [t.id for t in service.overdue(date(2026, 10, 13))] == [late.id]"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 50,
+      "severity": "medium"
+    }
+  ],
+  "dismissed": [],
+  "tools": [
+    {
+      "name": "ruff",
+      "version": "0.17.0",
+      "status": "ok",
+      "message": "",
+      "files_checked": 4,
+      "total_findings": 0,
+      "findings_on_changed_lines": 0,
+      "duration_s": 0.77
+    },
+    {
+      "name": "bandit",
+      "version": "1.9.4",
+      "status": "ok",
+      "message": "9 warning(s) in test files were ignored (noise in tests)",
+      "files_checked": 4,
+      "total_findings": 0,
+      "findings_on_changed_lines": 0,
+      "duration_s": 2.38
+    }
+  ],
+  "change_profile": {
+    "files_changed": 4,
+    "lines_added": 48,
+    "lines_removed": 8,
+    "languages": {
+      ".py": 4
+    },
+    "source_files": 3,
+    "test_files": 1,
+    "hints": []
+  },
+  "context": [
+    "`TicketService.overdue` (tickets/service.py) is called by 0 other repository function(s) and mentioned in 1 test function(s) (1 added or changed by this change).",
+    "`TicketService.set_due_date` (tickets/service.py) is called by 0 other repository function(s) and mentioned in 2 test function(s) (2 added or changed by this change).",
+    "`TicketStore.save` (tickets/store.py) is called by 3 other repository function(s) and mentioned in 1 test function(s).",
+    "`TicketStore.add` (tickets/store.py) is called by 1 other repository function(s) and mentioned in 3 test function(s).",
+    "`_from_row` (tickets/store.py) is called by 3 other repository function(s) and mentioned in no test function.",
+    "caller of `TicketStore.save`: tickets/service.py:37-41 (`TicketService.assign`)",
+    "caller of `TicketStore.add`: tickets/service.py:22-29 (`TicketService.create_ticket`)",
+    "caller of `_from_row`: tickets/store.py:43-45 (`TicketStore.get`)",
+    "test of `TicketStore.save`: tests/test_store.py:16-22 (`test_list_by_status`)",
+    "test of `TicketStore.add`: tests/test_store.py:9-13 (`test_add_and_get_round_trip`)",
+    "class of `TicketService.overdue`: tickets/service.py:19-20 (`TicketService.__init__`)",
+    "class of `TicketStore.save`: tickets/store.py:26-29 (`TicketStore.__init__`)",
+    "callee of `TicketService.overdue`: tickets/store.py:56-58 (`TicketStore.list_by_status`)",
+    "callee of `TicketService.set_due_date`: tickets/service.py:31-35 (`TicketService.get`)",
+    "caller of `TicketStore.save`: tickets/service.py:59-63 (`TicketService.change_status`)",
+    "caller of `_from_row`: tickets/store.py:60-64 (`TicketStore.search_title`)",
+    "test of `TicketStore.add`: tests/test_store.py:25-30 (`test_search_title_is_a_substring_match_and_safe_with_quotes`)"
+  ]
+}

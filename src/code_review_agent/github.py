@@ -15,14 +15,19 @@ Honesty rules (the same as for local inputs):
 
 from __future__ import annotations
 
+import io
 import os
 import re
+import zipfile
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
+from urllib.parse import urlparse
 
 import httpx
 
-from .schemas import PullRequestMetadata, ReviewInput, SupportingFile
+from .codegraph import build_pack
+from .evidence import added_lines
+from .schemas import PullRequestMetadata, RelatedSnippet, ReviewInput, SupportingFile
 
 API_URL = "https://api.github.com"
 TOKEN_ENV = "GITHUB_TOKEN"
@@ -31,6 +36,12 @@ MAX_SOURCE_CHARS = 20_000  # per supporting file (what the model sees)
 MAX_ANALYSIS_CHARS = 500_000  # per file given to the static-analysis tools
 MAX_ANALYSIS_FILES = 40
 MAX_RULES_CHARS = 20_000
+MAX_ARCHIVE_BYTES = 40_000_000  # repository download for the code graph
+MAX_CONTEXT_FILE_CHARS = 300_000  # per Python file read from the archive
+MAX_CONTEXT_TOTAL_CHARS = 8_000_000
+MAX_CONTEXT_FILES = 3000
+ARCHIVE_HOSTS = {"codeload.github.com"}  # the only host a repository download may be redirected to
+SKIP_CONTEXT_DIRS = {".git", ".venv", "venv", "env", "node_modules", "site-packages", "__pycache__", "build", "dist", ".tox", ".mypy_cache"}
 RULES_PATHS = (".review-agent/rules.md", "review-rules.md")  # looked up at the base commit, in this order
 SKIP_SOURCE_SUFFIXES = (".lock", ".min.js", ".min.css", ".map", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".pdf", ".zip")
 SKIP_SOURCE_NAMES = {"package-lock.json", "yarn.lock", "poetry.lock", "uv.lock", "pnpm-lock.yaml"}
@@ -66,12 +77,15 @@ class PullRequestSnapshot:
     analysis_files: list[SupportingFile] = field(default_factory=list)  # full changed .py files, for the tools
     rules: str | None = None  # team rules read from the BASE commit
     rules_source: str | None = None
+    related_code: list[RelatedSnippet] = field(default_factory=list)  # callers, callees, tests, class (code graph)
+    related_facts: list[str] = field(default_factory=list)
 
     def to_review_input(self) -> ReviewInput:
         return ReviewInput(
             pr=self.metadata, diff=self.diff,
             supporting_files=self.supporting_files, input_notes=self.notes,
             analysis_files=self.analysis_files, rules=self.rules, rules_source=self.rules_source,
+            related_code=self.related_code, related_facts=self.related_facts,
         )
 
 
@@ -92,6 +106,8 @@ class GitHubClient:
         if token:
             headers["Authorization"] = f"Bearer {token}"
         self.authenticated = bool(token)
+        self._transport = transport
+        self._timeout = timeout_s
         self._http = httpx.Client(
             base_url=api_url, headers=headers, timeout=timeout_s, transport=transport,
             follow_redirects=False,  # never forward the token to another host
@@ -197,6 +213,7 @@ class GitHubClient:
         max_source_files: int = 10,
         with_analysis: bool = True,
         with_rules: bool = True,
+        with_context: bool = True,
     ) -> PullRequestSnapshot:
         pr = self._get_json(f"/repos/{repository}/pulls/{number}").json()
         head_sha, base_sha = pr["head"]["sha"], pr["base"]["sha"]
@@ -275,6 +292,17 @@ class GitHubClient:
                 rules_source = f"{rules_path} at base commit {base_sha[:7]}"
                 break
 
+        # Repository context beyond the diff: one archive download, parsed in memory (see codegraph.py).
+        related: list[RelatedSnippet] = []
+        facts: list[str] = []
+        if with_context:
+            try:
+                sources, archive_notes = self.fetch_python_sources(repository, head_sha)
+                info += archive_notes
+                related, facts = build_pack(added_lines("\n".join(diff_parts)), sources)
+            except GitHubError as exc:
+                info.append(f"Repository context (callers, callees, tests) could not be retrieved ({exc}).")
+
         # The PR may have received a push while we were reading. Never mix two revisions.
         again = self._get_json(f"/repos/{repository}/pulls/{number}").json()
         if again["head"]["sha"] != head_sha:
@@ -296,7 +324,58 @@ class GitHubClient:
             analysis_files=analysis,
             rules=rules,
             rules_source=rules_source,
+            related_code=related,
+            related_facts=facts,
         )
+
+    def fetch_python_sources(self, repository: str, sha: str) -> tuple[dict[str, str], list[str]]:
+        """Every Python file of the repository at one commit, from ONE archive download (two requests in all).
+
+        The API answers with a redirect to codeload.github.com. We follow it by hand, to that host only, over https and
+        WITHOUT the Authorization header, so the token never leaves api.github.com. Size limits protect memory.
+        Returns (path -> source, notes).
+        """
+        response = self._get_without_redirect(f"/repos/{repository}/zipball/{sha}")
+        if response.status_code in (301, 302, 303, 307, 308):
+            target = urlparse(response.headers.get("Location", ""))
+            if target.scheme != "https" or target.hostname not in ARCHIVE_HOSTS:
+                raise GitHubError("GitHub redirected the download to an unexpected address; it was not followed.")
+            data = self._download(target.geturl())
+        elif response.status_code >= 300:
+            raise self._error(response)
+        else:
+            data = response.content
+        return _python_files_from_zip(data)
+
+    def _get_without_redirect(self, path: str) -> httpx.Response:
+        try:
+            return self._http.get(path)
+        except httpx.TimeoutException as exc:
+            raise GitHubError("GitHub did not answer in time.") from exc
+        except httpx.HTTPError as exc:
+            raise GitHubError(f"Cannot reach GitHub: {type(exc).__name__}.") from exc
+
+    def _download(self, url: str) -> bytes:
+        """GET a signed download address with a size limit and no credentials."""
+        too_big = GitHubError(f"The repository is larger than {MAX_ARCHIVE_BYTES // 1_000_000} MB; no code context was built.")
+        chunks, size = [], 0
+        try:
+            with httpx.Client(timeout=self._timeout * 4, transport=self._transport, follow_redirects=False) as plain:
+                with plain.stream("GET", url) as stream:
+                    if stream.status_code >= 300:
+                        raise GitHubError(f"The repository download failed (HTTP {stream.status_code}).", stream.status_code)
+                    if int(stream.headers.get("Content-Length", 0) or 0) > MAX_ARCHIVE_BYTES:
+                        raise too_big
+                    for chunk in stream.iter_bytes():
+                        size += len(chunk)
+                        if size > MAX_ARCHIVE_BYTES:
+                            raise too_big
+                        chunks.append(chunk)
+        except httpx.TimeoutException as exc:
+            raise GitHubError("The repository download timed out.") from exc
+        except httpx.HTTPError as exc:
+            raise GitHubError(f"The repository download failed: {type(exc).__name__}.") from exc
+        return b"".join(chunks)
 
     def _fetch_text(self, repository: str, path: str, sha: str) -> str:
         """Raw text of one file at one commit. Raises GitHubError (with .status) when it cannot be read."""
@@ -305,6 +384,44 @@ class GitHubClient:
             return response.content.decode("utf-8")
         except UnicodeDecodeError as exc:
             raise GitHubError(f"{path} is not UTF-8 text") from exc
+
+
+def _python_files_from_zip(data: bytes) -> tuple[dict[str, str], list[str]]:
+    """Python sources from a GitHub zipball (entries sit under one `owner-repo-sha/` folder). In memory only."""
+    notes: list[str] = []
+    files: dict[str, str] = {}
+    total = 0
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(data))
+    except zipfile.BadZipFile as exc:
+        raise GitHubError("The repository download is not a valid archive.") from exc
+    skipped_big = 0
+    for entry in archive.infolist():
+        if entry.is_dir() or not entry.filename.endswith(".py"):
+            continue
+        parts = PurePosixPath(entry.filename).parts[1:]  # drop the archive's root folder
+        if not parts or ".." in parts or any(p in SKIP_CONTEXT_DIRS or p.endswith(".egg-info") for p in parts[:-1]):
+            continue
+        if entry.file_size > MAX_CONTEXT_FILE_CHARS:
+            skipped_big += 1
+            continue
+        if len(files) >= MAX_CONTEXT_FILES or total >= MAX_CONTEXT_TOTAL_CHARS:
+            notes.append(f"Repository context is partial: only the first {len(files)} Python files were read.")
+            break
+        try:
+            with archive.open(entry) as handle:
+                raw = handle.read(MAX_CONTEXT_FILE_CHARS + 1)  # never trust the declared size
+            text = raw.decode("utf-8")
+        except (UnicodeDecodeError, OSError, RuntimeError):
+            continue
+        if len(raw) > MAX_CONTEXT_FILE_CHARS:
+            skipped_big += 1
+            continue
+        files["/".join(parts)] = text
+        total += len(text)
+    if skipped_big:
+        notes.append(f"{skipped_big} Python file(s) larger than {MAX_CONTEXT_FILE_CHARS} characters were left out of the repository context.")
+    return files, notes
 
 
 def _is_source(path: str) -> bool:

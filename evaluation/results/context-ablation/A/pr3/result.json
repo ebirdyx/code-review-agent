@@ -1,0 +1,195 @@
+{
+  "status": "completed",
+  "findings": [
+    {
+      "category": "security",
+      "severity": "high",
+      "file": "tickets/store.py",
+      "line": 65,
+      "title": "SQL injection via unparameterized query in search_assignee",
+      "explanation": "The `search_assignee` method builds an SQL query with an f-string that directly interpolates the user‑provided `name` value, allowing an attacker to inject arbitrary SQL (e.g., \"bob' OR '1'='1\") and retrieve or manipulate data beyond the intended assignee filter. Also reported by defects as logic_defect: The `search_assignee` method constructs the SQL statement using an f-string with the raw `name.lower()` value. If the provided name contains a single quote or other special characters, the resulting query will be malformed and raise a runtime SQLite error, breaking the function for such inputs.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "query = f\"SELECT * FROM tickets WHERE LOWER(assignee) = '{name.lower()}' ORDER BY id\""
+        }
+      ],
+      "found_by": [
+        "defects",
+        "security"
+      ],
+      "verification": "supported",
+      "verification_note": "The `search_assignee` method builds its SQL query with an f‑string that directly interpolates the user‑provided `name.lower()` value, creating an unparameterized query vulnerable to injection.",
+      "source": "llm"
+    },
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/store.py",
+      "line": 64,
+      "title": "Rule: All SQL uses bound parameters",
+      "explanation": "The new `search_assignee` method builds its SQL query using an f-string, directly interpolating the user-provided `name` value. This violates the team rule that SQL must use bound parameters (`?`) and must not be constructed with f-strings, `%`, or `+`.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "query = f\"SELECT * FROM tickets WHERE LOWER(assignee) = '{name.lower()}' ORDER BY id\""
+        },
+        {
+          "source": "rules",
+          "quote": "All SQL uses bound parameters (`?`). Never build SQL with f-strings, `%` or `+`."
+        }
+      ],
+      "found_by": [
+        "standards"
+      ],
+      "verification": "supported",
+      "verification_note": "The same f‑string query violates the team rule requiring all SQL to use bound parameters, thus the method breaches the coding rule.",
+      "source": "llm"
+    }
+  ],
+  "limitations": [],
+  "error": null,
+  "run": {
+    "revision": {
+      "repository": "ebirdyx/ticket-system-demo",
+      "pr_number": 3,
+      "url": "https://github.com/ebirdyx/ticket-system-demo/pull/3",
+      "base_sha": "31011419c5a58b58220c9be837409de5616c9a2f",
+      "head_sha": "60559c2aa26af2ffe8c6ccc9751feffc69e96237"
+    },
+    "case_id": "ebirdyx-ticket-system-demo-pr3-60559c2",
+    "created_at": "2026-10-14T01:50:48+00:00",
+    "prompt_version": "multi_v4",
+    "model": "gpt-oss:120b",
+    "host": "https://ollama.com",
+    "duration_s": 11.195,
+    "prompt_tokens": 23585,
+    "completion_tokens": 4150,
+    "ticket": "TS-3: Search tickets by assignee"
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [],
+  "problems": [],
+  "duplicates_removed": 1,
+  "pipeline": "multi",
+  "passes": [
+    {
+      "name": "compliance",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.74,
+      "prompt_tokens": 5233,
+      "completion_tokens": 1168,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "defects",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.92,
+      "prompt_tokens": 4628,
+      "completion_tokens": 1026,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "security",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.39,
+      "prompt_tokens": 4562,
+      "completion_tokens": 722,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "standards",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.3,
+      "prompt_tokens": 4635,
+      "completion_tokens": 821,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "verify",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 1.55,
+      "prompt_tokens": 4527,
+      "completion_tokens": 413,
+      "findings": 0,
+      "message": ""
+    }
+  ],
+  "criteria": [
+    {
+      "number": 1,
+      "text": "Tickets can be found by the name of their assignee.",
+      "verdict": "met",
+      "explanation": "TicketService.find_by_assignee delegates to TicketStore.search_assignee which queries tickets where the assignee matches the given name, thus tickets can be found by assignee name.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def find_by_assignee(self, name: str) -> list[Ticket]:\n    \"\"\"Tickets assigned to `name` (case does not matter); empty if nobody matches.\"\"\"\n    return self.store.search_assignee(name.strip())"
+        },
+        {
+          "source": "code",
+          "quote": "def search_assignee(self, name: str) -> list[Ticket]:\n    query = f\"SELECT * FROM tickets WHERE LOWER(assignee) = '{name.lower()}' ORDER BY id\"\n    rows = self._db.execute(query).fetchall()\n    return [_from_row(r) for r in rows]"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 41,
+      "severity": "medium"
+    },
+    {
+      "number": 2,
+      "text": "The match ignores upper and lower case.",
+      "verdict": "met",
+      "explanation": "The SQL query lower‑cases both the stored assignee and the supplied name, making the match case‑insensitive.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "query = f\"SELECT * FROM tickets WHERE LOWER(assignee) = '{name.lower()}' ORDER BY id\""
+        }
+      ],
+      "file": "tickets/store.py",
+      "line": 64,
+      "severity": "medium"
+    },
+    {
+      "number": 3,
+      "text": "When nobody matches, the result is an empty list.",
+      "verdict": "met",
+      "explanation": "If no rows match, the list comprehension over an empty result set yields an empty list, satisfying the requirement for an empty result when nobody matches.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "rows = self._db.execute(query).fetchall()\nreturn [_from_row(r) for r in rows]"
+        }
+      ],
+      "file": "tickets/store.py",
+      "line": 66,
+      "severity": "medium"
+    }
+  ],
+  "dismissed": [],
+  "tools": [],
+  "change_profile": {
+    "files_changed": 3,
+    "lines_added": 23,
+    "lines_removed": 0,
+    "languages": {
+      ".py": 3
+    },
+    "source_files": 2,
+    "test_files": 1,
+    "hints": []
+  },
+  "context": []
+}

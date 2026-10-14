@@ -1,0 +1,255 @@
+{
+  "status": "completed",
+  "findings": [
+    {
+      "category": "security",
+      "severity": "high",
+      "file": "tickets/service.py",
+      "line": 44,
+      "title": "Insufficient authorization checks in resolve method",
+      "explanation": "The resolve method allows the ticket reporter to resolve the ticket and completely ignores the admins parameter, granting resolution rights to users who should not have them according to the ticket's acceptance criteria, leading to unauthorized ticket resolution. Also reported by compliance, defects as logic_defect: The acceptance criteria require that only the assignee or an administrator can resolve a ticket, but the permission check also permits the ticket reporter to resolve, violating the intended security model. Also reported by compliance as requirement_mismatch: The ticket requires that only the assignee or an administrator can resolve a ticket, but the implementation allows the reporter to resolve a…",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def resolve(self, ticket_id: int, actor: str, admins: frozenset[str] = frozenset()) -> Ticket:"
+        },
+        {
+          "source": "code",
+          "quote": "if actor != ticket.assignee and actor != ticket.reporter:"
+        },
+        {
+          "source": "code",
+          "quote": "raise PermissionError(f\"{actor} cannot resolve ticket {ticket_id}\")"
+        },
+        {
+          "source": "ticket",
+          "quote": "1. Only the assignee or an administrator can resolve a ticket."
+        },
+        {
+          "source": "code",
+          "quote": "if actor != ticket.assignee and actor != ticket.reporter:\n            raise PermissionError(f\"{actor} cannot resolve ticket {ticket_id}\")"
+        },
+        {
+          "source": "ticket",
+          "quote": "2. Anyone else who tries gets a PermissionError and the ticket is unchanged."
+        }
+      ],
+      "found_by": [
+        "compliance",
+        "defects",
+        "security"
+      ],
+      "verification": "supported",
+      "verification_note": "The resolve method permits the reporter (actor != ticket.assignee and actor != ticket.reporter) and never checks admins, violating the acceptance criteria that only the assignee or an administrator may resolve.",
+      "source": "llm"
+    },
+    {
+      "category": "logic_defect",
+      "severity": "high",
+      "file": "tickets/service.py",
+      "line": 41,
+      "title": "Admins parameter is ignored, preventing administrators from resolving tickets",
+      "explanation": "The method signature includes an `admins` parameter intended for administrator checks, but the implementation never uses it, so administrators cannot resolve tickets even when they should be allowed.",
+      "evidence": [
+        {
+          "source": "ticket",
+          "quote": "1. Only the assignee or an administrator can resolve a ticket."
+        },
+        {
+          "source": "code",
+          "quote": "def resolve(self, ticket_id: int, actor: str, admins: frozenset[str] = frozenset()) -> Ticket:"
+        },
+        {
+          "source": "code",
+          "quote": "if actor != ticket.assignee and actor != ticket.reporter:"
+        }
+      ],
+      "found_by": [
+        "defects"
+      ],
+      "verification": "supported",
+      "verification_note": "The `admins` parameter is present in the signature but never used in the permission check, so administrators cannot resolve tickets as required.",
+      "source": "llm"
+    },
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/service.py",
+      "line": 42,
+      "title": "Rule: public functions must have docstring stating return or raise",
+      "explanation": "The public method `resolve` has a one-line docstring that mentions the raised PermissionError but does not state what the function returns, violating the rule that public functions must have a one-line docstring that says what they return or raise.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "\"\"\"Mark a ticket resolved. Raises PermissionError if `actor` is not allowed to.\"\"\""
+        },
+        {
+          "source": "rules",
+          "quote": "Public functions have type hints and a one-line docstring that says what they return or raise."
+        }
+      ],
+      "found_by": [
+        "standards"
+      ],
+      "verification": "supported",
+      "verification_note": "The public `resolve` function has a docstring that mentions the raised PermissionError but does not state what the function returns, breaching the rule that docstrings must say what they return or raise.",
+      "source": "llm"
+    }
+  ],
+  "limitations": [
+    "The admin set passed to `resolve` is never consulted, so we cannot determine if future code might use it.",
+    "We assume the `transition` function enforces the required workflow, as indicated by the test, but its implementation is not shown."
+  ],
+  "error": null,
+  "run": {
+    "revision": {
+      "repository": "ebirdyx/ticket-system-demo",
+      "pr_number": 4,
+      "url": "https://github.com/ebirdyx/ticket-system-demo/pull/4",
+      "base_sha": "31011419c5a58b58220c9be837409de5616c9a2f",
+      "head_sha": "6d474ad63768ec95c6216d77cee949006b91b220"
+    },
+    "case_id": "ebirdyx-ticket-system-demo-pr4-6d474ad",
+    "created_at": "2026-10-14T01:51:07+00:00",
+    "prompt_version": "multi_v4",
+    "model": "gpt-oss:120b",
+    "host": "https://ollama.com",
+    "duration_s": 14.434,
+    "prompt_tokens": 20908,
+    "completion_tokens": 4610,
+    "ticket": "TS-4: Restrict who can resolve a ticket"
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [],
+  "problems": [],
+  "duplicates_removed": 3,
+  "pipeline": "multi",
+  "passes": [
+    {
+      "name": "compliance",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 5.34,
+      "prompt_tokens": 4653,
+      "completion_tokens": 1518,
+      "findings": 2,
+      "message": ""
+    },
+    {
+      "name": "defects",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 3.59,
+      "prompt_tokens": 4048,
+      "completion_tokens": 932,
+      "findings": 2,
+      "message": ""
+    },
+    {
+      "name": "security",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.05,
+      "prompt_tokens": 3982,
+      "completion_tokens": 636,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "standards",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.28,
+      "prompt_tokens": 4055,
+      "completion_tokens": 780,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "verify",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 1.91,
+      "prompt_tokens": 4170,
+      "completion_tokens": 744,
+      "findings": 0,
+      "message": ""
+    }
+  ],
+  "criteria": [
+    {
+      "number": 1,
+      "text": "Only the assignee or an administrator can resolve a ticket.",
+      "verdict": "not_met",
+      "explanation": "The ticket requires that only the assignee or an administrator can resolve a ticket, but the implementation allows the reporter to resolve and never checks the admins set.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def resolve(self, ticket_id: int, actor: str, admins: frozenset[str] = frozenset()) -> Ticket:"
+        },
+        {
+          "source": "code",
+          "quote": "if actor != ticket.assignee and actor != ticket.reporter:\n            raise PermissionError(f\"{actor} cannot resolve ticket {ticket_id}\")"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 44,
+      "severity": "high"
+    },
+    {
+      "number": 2,
+      "text": "Anyone else who tries gets a PermissionError and the ticket is unchanged.",
+      "verdict": "not_met",
+      "explanation": "The specification says anyone else should get a PermissionError and the ticket remain unchanged. The code raises PermissionError for non‑assignee/non‑reporter, but it incorrectly permits the reporter, which is not an admin, to resolve the ticket without error.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "if actor != ticket.assignee and actor != ticket.reporter:\n            raise PermissionError(f\"{actor} cannot resolve ticket {ticket_id}\")"
+        },
+        {
+          "source": "ticket",
+          "quote": "2. Anyone else who tries gets a PermissionError and the ticket is unchanged."
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 44,
+      "severity": "high"
+    },
+    {
+      "number": 3,
+      "text": "Resolving follows the normal workflow (a ticket must be in progress first).",
+      "verdict": "met",
+      "explanation": "Resolving a ticket calls the workflow's `transition` function, which enforces the normal status workflow. The test verifies that calling resolve on a ticket that is not IN_PROGRESS raises InvalidTransition, confirming the workflow check.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "transition(ticket, Status.RESOLVED)"
+        },
+        {
+          "source": "code",
+          "quote": "with pytest.raises(InvalidTransition):\n            service.resolve(ticket.id, \"bob\")"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 46,
+      "severity": "medium"
+    }
+  ],
+  "dismissed": [],
+  "tools": [],
+  "change_profile": {
+    "files_changed": 2,
+    "lines_added": 35,
+    "lines_removed": 0,
+    "languages": {
+      ".py": 2
+    },
+    "source_files": 1,
+    "test_files": 1,
+    "hints": []
+  },
+  "context": []
+}

@@ -21,6 +21,8 @@ bugs that 450+ tests had not.
 | 9 | Report tables looked like raw text in the UI | the Markdown renderer had no table support | tables rendered | screenshot from the user |
 | 10 | The verifier pass of Qwen2.5-Coder was lost | field name written without quotes (`verdict:`) | bare keys at the start of a line are quoted, with a visible warning | first real Qwen run |
 | 11 | 4 of 6 demo reviews crashed after the model had answered | printing the report to a redirected Windows output failed on a non-breaking hyphen (U+2011) written by the model | output replaces what it cannot show; regression test | ticket-system demo |
+| 12 | The code graph said "mentioned in no test function" for code the same PR tests, and listed the callees of the PR's own new tests | the PR's added tests were excluded from the test list and treated as changed functions | tests count as tests (even when added by the PR) and are not the subject of the search; constructors are matched by class name | trying the graph on the real demo branches before any model run |
+| 13 | The verifier dismissed a valid remark together with a speculative one | cross-category merging by line joined two unrelated claims (a missing boundary test and an invented missing-authorization worry); the verifier judged the mixed claim and dismissed it | categories differ: merge only when the reports quote the same code, share much of their wording, or one is tool-backed | demo runs of PR 2 and PR 6 (checked against 18 saved runs) |
 
 Lessons: (a) test with the real model early; (b) every parser must keep what is valid and report what it dropped; (c) any
 text the model writes can contain any character; (d) setup mistakes (stale terminal, typo) deserve a diagnostic command
@@ -83,6 +85,7 @@ Six pull requests with an answer key written beforehand: four planted defects, o
 | 4 | Checklist-consistency check (a criterion MET where a finding sits on its own lines) | both Qwen runs | **Done**, unit-tested with the Qwen case; not yet seen live on a model that makes the mistake |
 | 5 | Verifier must judge rule findings (not call them out of scope) | PR #4 dismissal | Prompt fixed in `multi_v3`; did not recur in the second run |
 | 6 | Live GitHub Actions run on a real repository | not done | needs repository secrets |
+| 7 | Repository context (code graph: callers, callees, tests, class) | beyond-the-diff review in commercial tools | **Done**, tested; first measurement shows no change in detection on the demo (see section 9) |
 
 ## 8. Second run after the improvements (details in `evaluation/results/ticket-system-demo/README.md`)
 
@@ -92,3 +95,15 @@ Six pull requests with an answer key written beforehand: four planted defects, o
 - The noise on a clean PR is not solved, and ambiguity detection still needs a design of its own (a separate pass).
 - Unauthenticated GitHub access is limited to 60 requests an hour: a day of demos exhausts it. Set a read-only `GITHUB_TOKEN`, or
   review saved snapshots (`review-agent review <snapshot folder>`), which are also exact and reproducible.
+
+## 9. Repository context and the three-configuration comparison (details in `evaluation/results/context-ablation/README.md`)
+
+- Added a lightweight code graph (`codegraph.py`): for each changed Python function, its callers, callees, tests and class constructor, found
+  with `ast`, from one repository download (2 requests), saved with the snapshot, shown to every pass and the verifier.
+- Comparison on the six demo PRs, one run each: LLM only, + Ruff/Bandit, + repository context. **All three found all four planted
+  defects and got the same checklists right**: the planted defects are visible in the diff, so the extra layers had nothing to add (ceiling effect).
+- Tools gave deterministic backing (not dismissable by the verifier) rather than more recall. Context used about 14% more input tokens and showed
+  no verifier dismissals (3 and 5 in the other configurations): a lead, not a result, with one run each.
+- Real lesson on method: trying the new module on real branches before any model run found two bugs that would have fed false facts to the model, and
+  replaying 18 saved runs showed a merge rule that was too greedy. Offline replay of saved runs is a cheap way to test the deterministic parts.
+- To test context properly we need pull requests whose defect is only visible with the surrounding code. Not built yet.

@@ -1,0 +1,177 @@
+{
+  "status": "completed",
+  "findings": [
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/service.py",
+      "line": 44,
+      "title": "Rule: Public functions must have a docstring that says what they return or raise",
+      "explanation": "The public method `set_due_date` has a one-line docstring, but it does not describe what the function returns or raises, violating the team rule requiring such documentation.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "\"\"\"Set or clear the due date of a ticket.\"\"\""
+        },
+        {
+          "source": "rules",
+          "quote": "Public functions have type hints and a one-line docstring that says what they return or raise."
+        },
+        {
+          "source": "code",
+          "quote": "\"\"\"Tickets whose due date has passed and that are not closed.\"\"\""
+        }
+      ],
+      "found_by": [
+        "standards"
+      ],
+      "verification": "supported",
+      "verification_note": "The public method `set_due_date` has a one‑line docstring that does not mention its return value or possible exceptions, violating the rule that docstrings must state what the function returns or raises.",
+      "source": "llm"
+    }
+  ],
+  "limitations": [
+    "Cannot assess whether permission/authorization checks are required for the new set_due_date and overdue methods, as the surrounding authentication/authorization context is not provided."
+  ],
+  "error": null,
+  "run": {
+    "revision": {
+      "repository": "ebirdyx/ticket-system-demo",
+      "pr_number": 6,
+      "url": "https://github.com/ebirdyx/ticket-system-demo/pull/6",
+      "base_sha": "31011419c5a58b58220c9be837409de5616c9a2f",
+      "head_sha": "41791e15375771ff4d2504ca8e5d5069f947a340"
+    },
+    "case_id": "ebirdyx-ticket-system-demo-pr6-41791e1",
+    "created_at": "2026-10-14T01:51:52+00:00",
+    "prompt_version": "multi_v4",
+    "model": "gpt-oss:120b",
+    "host": "https://ollama.com",
+    "duration_s": 21.37,
+    "prompt_tokens": 30949,
+    "completion_tokens": 5838,
+    "ticket": "TS-6: Due dates and overdue tickets"
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [],
+  "problems": [],
+  "duplicates_removed": 1,
+  "pipeline": "multi",
+  "passes": [
+    {
+      "name": "compliance",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 4.8,
+      "prompt_tokens": 6740,
+      "completion_tokens": 1629,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "defects",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 8.06,
+      "prompt_tokens": 6135,
+      "completion_tokens": 1785,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "security",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 4.38,
+      "prompt_tokens": 6069,
+      "completion_tokens": 1024,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "standards",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 3.45,
+      "prompt_tokens": 6142,
+      "completion_tokens": 1013,
+      "findings": 2,
+      "message": ""
+    },
+    {
+      "name": "verify",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 1.39,
+      "prompt_tokens": 5863,
+      "completion_tokens": 387,
+      "findings": 0,
+      "message": ""
+    }
+  ],
+  "criteria": [
+    {
+      "number": 1,
+      "text": "A ticket can have an optional due date.",
+      "verdict": "met",
+      "explanation": "The Ticket model includes an optional due_date field and the service provides set_due_date to set or clear it, satisfying the requirement for an optional due date.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "due_date: date | None = None"
+        },
+        {
+          "source": "code",
+          "quote": "def set_due_date(self, ticket_id: int, due: date | None) -> Ticket:"
+        },
+        {
+          "source": "code",
+          "quote": "\"\"\"Set or clear the due date of a ticket.\"\"\""
+        }
+      ],
+      "file": "tickets/models.py",
+      "line": 34,
+      "severity": "medium"
+    },
+    {
+      "number": 2,
+      "text": "Overdue tickets are flagged.",
+      "verdict": "met",
+      "explanation": "The service implements an overdue method that returns tickets whose due date has passed and are not closed, and a test confirms overdue tickets are correctly listed.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def overdue(self, today: date | None = None) -> list[Ticket]:"
+        },
+        {
+          "source": "code",
+          "quote": "\"\"\"Tickets whose due date has passed and that are not closed.\"\"\""
+        },
+        {
+          "source": "code",
+          "quote": "if t.due_date is not None and t.due_date < today"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 50,
+      "severity": "medium"
+    }
+  ],
+  "dismissed": [],
+  "tools": [],
+  "change_profile": {
+    "files_changed": 4,
+    "lines_added": 48,
+    "lines_removed": 8,
+    "languages": {
+      ".py": 4
+    },
+    "source_files": 3,
+    "test_files": 1,
+    "hints": []
+  },
+  "context": []
+}

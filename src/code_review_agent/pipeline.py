@@ -20,6 +20,7 @@ visible with the reason, and a criterion nobody judged is shown as "cannot deter
 from __future__ import annotations
 
 import json
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -28,7 +29,7 @@ from importlib import resources
 
 from pydantic import BaseModel
 
-from .context import DEFAULT_MAX_CHARS, build_user_message
+from .context import DEFAULT_MAX_CHARS, build_user_message, _NUM_WIDTH
 from .events import EventLog
 from .evidence import (
     DEFAULT_TOOLS,
@@ -69,7 +70,7 @@ from .schemas import (
 )
 from .validation import DROPPED, InvalidOutput, check_criteria, check_grounding, parse_json_output
 
-MULTI_PROMPT_VERSION = "multi_v3"  # v1 had no static-analysis or team-rules blocks; v1 and v2 stay loadable (v3: stricter rules pass, vague-criteria guidance, verifier judges rule findings)
+MULTI_PROMPT_VERSION = "multi_v4"  # v1 had no static-analysis or team-rules blocks; v1 and v2 stay loadable (v3: stricter rules pass, vague-criteria guidance, verifier judges rule findings)
 DEFAULT_PASSES = ("compliance", "defects", "security", "standards")
 PASS_MODELS: dict[str, type[BaseModel]] = {
     "compliance": ComplianceReview,
@@ -168,20 +169,47 @@ def _finding_from_criterion(check: CriterionCheck) -> Finding:
     )
 
 
+_STOPWORDS = frozenset(
+    "the a an of to in is are be it this that for and or not with by as on at from if its which than then so no can may will "
+    "should would does do has have been was were their there into only also but".split())
+RELATED_WORD_OVERLAP = 0.30  # share of the shorter text's content words that two reports must have in common
+
+
+def _content_words(f: Finding) -> set[str]:
+    text = f"{f.title} {f.explanation}".lower()
+    return {w for w in re.findall(r"[a-z_][a-z0-9_]{3,}", text) if w not in _STOPWORDS}
+
+
+def _same_subject(a: Finding, b: Finding) -> bool:
+    """Do two reports on the same spot talk about the same thing? Specialists look at a problem from different angles
+    (the ticket, bugs, security, the team rules), so the same defect comes back under different categories. But two
+    UNRELATED remarks can sit on one line too (a speculative security worry and a missing test), and merging those makes
+    the verifier judge a mixed claim and dismiss both. So reports of different categories are folded only when they quote
+    the same code, use much the same words, or one is backed by a static-analysis tool (a deterministic fact about the line).
+    """
+    if "tool" in (a.source, b.source):
+        return True
+    if _code_quotes(a.evidence) & _code_quotes(b.evidence):
+        return True
+    words_a, words_b = _content_words(a), _content_words(b)
+    if not words_a or not words_b:
+        return False
+    return len(words_a & words_b) / min(len(words_a), len(words_b)) >= RELATED_WORD_OVERLAP
+
+
 def _same_issue(a: Finding, b: Finding) -> bool:
-    """One report per spot. Specialists look at a problem from different angles (the ticket, bugs, security, the team
-    rules), so the same defect often comes back under different categories on the same line. Nothing is lost by
-    folding them: `merge_candidates` keeps every explanation and every quote."""
+    """One report per issue: the same file and line (or, for a criterion finding, a few lines apart), and, when the
+    categories differ, the same subject (see `_same_subject`). `merge_candidates` keeps every explanation and quote."""
     if a.file != b.file or a.file == WHOLE_CHANGE:
         return False
     if a.line is not None and a.line == b.line:
-        return True
+        return a.category == b.category or _same_subject(a, b)
     # A criterion that is not met points at "where the code concerned is" (often the whole function), while the
-    # defects pass points at the exact line: a few lines apart is still the same problem. Style findings stay apart.
+    # defects pass points at the exact line: a few lines apart can still be the same problem. Style findings stay apart.
     if a.line is not None and b.line is not None and abs(a.line - b.line) <= NEARBY_LINES:
         pair = {a.category, b.category}
         if Category.REQUIREMENT_MISMATCH in pair and Category.MAINTAINABILITY not in pair:
-            return True
+            return _same_subject(a, b)
     return a.category == b.category and _norm(a.title) == _norm(b.title)
 
 
@@ -402,7 +430,7 @@ def assemble_multi(record: RunRecord, ticket: Ticket | None, review_input: Revie
     coverage = Coverage(complete=record.coverage.complete and not omitted, omitted=[*record.coverage.omitted, *omitted])
     common = {"run": run, "coverage": coverage, "missing_inputs": record.missing_inputs,
               "pipeline": "multi", "passes": summaries, "tools": record.tool_runs,
-              "change_profile": compute_profile(review_input)}
+              "change_profile": compute_profile(review_input), "context": context_summary(review_input)}
 
     attempted = [s for s in prepared.summaries if s.status != "skipped"]
     # Every model pass failed AND no tool produced a finding: nothing can be concluded. (If a tool did
@@ -428,6 +456,26 @@ def assemble_multi(record: RunRecord, ticket: Ticket | None, review_input: Revie
 # ------------------------------------------------------------------------- context text
 
 
+def render_related(review_input: ReviewInput) -> str:
+    """The RELATED CODE block: repository code outside the change, numbered like the diff, with plain facts."""
+    lines = ["Code from the repository that is NOT part of this change. It was found by matching function names, so it can "
+             "match the wrong function. Use it to understand how the changed code is used and tested. Report a problem in "
+             "it only if this change causes or worsens it."]
+    if review_input.related_facts:
+        lines += ["", "Facts:"] + [f"- {f}" for f in review_input.related_facts]
+    for s in review_input.related_code:
+        lines += ["", f"--- {s.kind} of `{s.symbol}`: {s.path} (lines {s.start_line}-{s.end_line}) ---"]
+        lines += [f"{n:>{_NUM_WIDTH}} | {text}" for n, text in enumerate(s.text.splitlines(), s.start_line)]
+    return "\n".join(lines)
+
+
+def context_summary(review_input: ReviewInput) -> list[str]:
+    """Short lines for the report: what repository context the model was given."""
+    lines = list(review_input.related_facts)
+    lines += [f"{s.kind} of `{s.symbol}`: {s.path}:{s.start_line}-{s.end_line} (`{s.name}`)" for s in review_input.related_code]
+    return lines
+
+
 def shared_blocks(record: RunRecord, review_input: ReviewInput) -> dict[str, str]:
     """Extra fenced blocks every pass receives: the tools' leads, and the team's rules (when there are any)."""
     blocks: dict[str, str] = {}
@@ -436,6 +484,8 @@ def shared_blocks(record: RunRecord, review_input: ReviewInput) -> dict[str, str
     if review_input.rules and review_input.rules.strip():
         source = f"(from {review_input.rules_source})\n" if review_input.rules_source else ""
         blocks["TEAM RULES"] = source + review_input.rules.strip()
+    if review_input.related_code or review_input.related_facts:
+        blocks["RELATED CODE"] = render_related(review_input)
     return blocks
 
 

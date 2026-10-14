@@ -22,6 +22,7 @@ modèle de langage **à poids ouverts** via Ollama, puis produit des constats st
 | **Analyse statique** (Ruff + Bandit, Python) : avertissements déterministes sur les lignes modifiées, fusionnés avec les constats du modèle et fournis aux passes comme pistes | Fait, testé avec les vrais outils et sur une vraie PR (pallets/click) |
 | **Règles d'équipe** (`.review-agent/rules.md` lu sur la branche de base, ou `--rules`) vérifiées par une passe dédiée | Fait, testé (modèle simulé) et sur 4 exécutions réelles |
 | **Profil du changement** (taille, tests modifiés ou non, zones sensibles, dépendances, CI), sans modèle | Fait, testé |
+| **Contexte du dépôt** (graphe de code léger, Python) : pour chaque fonction modifiée, ses appelants, les fonctions qu'elle appelle, les tests qui la mentionnent et le constructeur de sa classe, trouvés avec `ast` dans une seule archive téléchargée | Fait, testé (simulation) et essayé sur les PR de démonstration. Effet **mesuré sur 6 PR seulement** : voir `evaluation/results/context-ablation/` |
 | **Profils de modèles** (`--profile`) : Ollama local ou cloud, Qwen2.5-Coder via un service hébergé compatible OpenAI (OpenRouter) | Fait. **Exécutions réelles** de Qwen2.5-Coder 32B et Qwen3-Coder 30B via OpenRouter sur la PR de démonstration (voir `docs/model-comparison-notes.md`). Qwen local (Ollama) **pas encore exécuté** |
 | Suivi en direct (événements dans le terminal et `events.jsonl`) et interface web locale (liste des revues, rapport, constats, chronologie, accepter / rejeter chaque constat, lancer une revue de PR) | Fait, testé (serveur réel en local, page vérifiée dans un vrai navigateur) |
 | Lecture d'une Pull Request GitHub (lecture seule, révision exacte enregistrée) | Fait, testé avec simulation et avec l'API réelle (lecture seulement) |
@@ -107,6 +108,14 @@ avec un délai maximal, sans lire la configuration de la PR et sans aucune varia
 Sans règles, la passe est ignorée et le rapport le dit.
 
 **Profil du changement.** Sans modèle : fichiers, lignes, types, « du code source a changé mais aucun test », zones sensibles (auth, paiement, migrations…), dépendances, CI, taille.
+
+**Contexte du dépôt (graphe de code léger).** Le diff montre ce qui change, pas comment le code est utilisé. Pour chaque fonction Python
+modifiée, `codegraph.py` retrouve (avec le module standard `ast`, sans base vectorielle) : les fonctions qui l'appellent, celles qu'elle appelle,
+les tests qui la mentionnent et le `__init__` de sa classe, plus des faits simples (« mentionnée dans aucun test »). Le dépôt est téléchargé en
+**une seule archive** (2 requêtes, la limite de 60 requêtes par heure n'est donc pas consommée par fichier), lue en mémoire ; le jeton n'est jamais
+envoyé au serveur de téléchargement. Le résultat est enregistré avec la capture de la PR (`related.json`), de sorte qu'une revue rejouée est identique.
+Les appels sont trouvés **par nom** : un extrait peut désigner la mauvaise fonction (le modèle en est informé et les noms trop fréquents sont ignorés).
+Les constats peuvent citer ces extraits (lignes et citations vérifiées comme pour le diff). `--no-context` désactive la fonction.
 C'est notre équivalent du « rayon d'impact » d'outils comme Qodo.
 
 **Sortie du modèle partiellement invalide.** Si un constat est mal formé (par exemple une étiquette de preuve inconnue), les constats valides sont **conservés** et le constat rejeté est signalé
@@ -311,6 +320,8 @@ Détail : `evaluation/results/dev-eval1.md`.
 - L'analyse statique ne couvre que Python pour l'instant, et seulement les fichiers modifiés disponibles en entier (limite de 500 000 caractères par fichier).
   Le banc d'essai (22 cas) est aussi 100 % Python : la qualité sur TypeScript, Java, etc. n'a **pas été mesurée** (les passes du modèle lisent le diff
   et fonctionnent sans analyse statique, mais sans mesure on ne peut rien affirmer).
+- Le contexte du dépôt n'a pas montré d'effet mesurable sur les 6 PR de démonstration (les défauts y sont visibles dans le diff) : il faut des cas où le défaut
+  n'apparaît qu'avec le code environnant. Il ajoute environ 14 % de jetons en entrée. Appels trouvés par nom (peuvent désigner la mauvaise fonction), Python seulement.
 - Le pipeline multi-passes (défaut) **n'a pas encore été évalué** sur le banc d'essai : tous les résultats chiffrés ci-dessous viennent du pipeline à une seule passe (`--pipeline single`).
   La vérification peut aussi écarter à tort un vrai constat (il reste visible dans « Dismissed by verification »).
 - Le modèle n'est pas déterministe, même à température 0 : répéter les exécutions (`--repeat`).
