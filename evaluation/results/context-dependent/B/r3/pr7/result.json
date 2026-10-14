@@ -1,0 +1,166 @@
+{
+  "status": "completed",
+  "findings": [],
+  "limitations": [
+    "The review only has access to the changed files and supporting code provided. It cannot determine whether other parts of the repository call TicketStore.get and rely on the previous behavior of returning None for missing tickets, which could cause breakage.",
+    "The review lacks information about how TicketStore.get is exposed to external callers (e.g., via a web API), so potential information disclosure through uncaught KeyError exceptions cannot be fully assessed."
+  ],
+  "error": null,
+  "run": {
+    "revision": {
+      "repository": "ebirdyx/ticket-system-demo",
+      "pr_number": 7,
+      "url": "https://github.com/ebirdyx/ticket-system-demo/pull/7",
+      "base_sha": "31011419c5a58b58220c9be837409de5616c9a2f",
+      "head_sha": "a8fc214d01f07394b509d16ef58e2fcdf89d19b2"
+    },
+    "case_id": "ebirdyx-ticket-system-demo-pr7-a8fc214",
+    "created_at": "2026-10-14T04:56:41+00:00",
+    "prompt_version": "multi_v4",
+    "model": "gpt-oss:120b",
+    "host": "https://ollama.com",
+    "duration_s": 9.046,
+    "prompt_tokens": 15734,
+    "completion_tokens": 2587,
+    "ticket": "TS-7: The store reports an unknown ticket id with an error"
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [],
+  "problems": [],
+  "duplicates_removed": 0,
+  "pipeline": "multi",
+  "passes": [
+    {
+      "name": "compliance",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.55,
+      "prompt_tokens": 4402,
+      "completion_tokens": 769,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "defects",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.58,
+      "prompt_tokens": 3797,
+      "completion_tokens": 654,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "security",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.28,
+      "prompt_tokens": 3731,
+      "completion_tokens": 534,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "standards",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.22,
+      "prompt_tokens": 3804,
+      "completion_tokens": 630,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "verify",
+      "status": "skipped",
+      "model": "",
+      "duration_s": null,
+      "prompt_tokens": null,
+      "completion_tokens": null,
+      "findings": 0,
+      "message": "no model-reported candidate findings to verify"
+    }
+  ],
+  "criteria": [
+    {
+      "number": 1,
+      "text": "TicketStore.get raises KeyError for a ticket id that does not exist, instead of returning None.",
+      "verdict": "met",
+      "explanation": "TicketStore.get now raises KeyError when the ticket id does not exist.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "if row is None:\n    raise KeyError(ticket_id)"
+        },
+        {
+          "source": "code",
+          "quote": "def get(self, ticket_id: int) -> Ticket:\n    \"\"\"Return the ticket with this id. Raises KeyError if there is none.\"\"\""
+        },
+        {
+          "source": "code",
+          "quote": "with pytest.raises(KeyError):\n    store.get(12345)"
+        }
+      ],
+      "file": "tickets/store.py",
+      "line": 46,
+      "severity": "medium"
+    },
+    {
+      "number": 2,
+      "text": "TicketStore.get still returns the ticket when it exists.",
+      "verdict": "met",
+      "explanation": "TicketStore.get returns the ticket when the id exists.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "return _from_row(row)"
+        },
+        {
+          "source": "code",
+          "quote": "assert store.get(added.id).title == \"Login fails\""
+        }
+      ],
+      "file": "tickets/store.py",
+      "line": 47,
+      "severity": "medium"
+    }
+  ],
+  "dismissed": [],
+  "tools": [
+    {
+      "name": "ruff",
+      "version": "0.17.0",
+      "status": "ok",
+      "message": "",
+      "files_checked": 2,
+      "total_findings": 0,
+      "findings_on_changed_lines": 0,
+      "duration_s": 0.86
+    },
+    {
+      "name": "bandit",
+      "version": "1.9.4",
+      "status": "ok",
+      "message": "4 warning(s) in test files were ignored (noise in tests)",
+      "files_checked": 2,
+      "total_findings": 0,
+      "findings_on_changed_lines": 0,
+      "duration_s": 2.53
+    }
+  ],
+  "change_profile": {
+    "files_changed": 2,
+    "lines_added": 9,
+    "lines_removed": 3,
+    "languages": {
+      ".py": 2
+    },
+    "source_files": 1,
+    "test_files": 1,
+    "hints": []
+  },
+  "context": []
+}

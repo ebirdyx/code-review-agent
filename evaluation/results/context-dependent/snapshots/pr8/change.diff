@@ -1,0 +1,39 @@
+diff --git a/tests/test_workflow.py b/tests/test_workflow.py
+--- a/tests/test_workflow.py
++++ b/tests/test_workflow.py
+@@ -11,8 +11,9 @@ def ticket(status):
+ @pytest.mark.parametrize(("start", "end"), [(s, e) for s, targets in ALLOWED.items() for e in targets])
+ def test_allowed_transitions(start, end):
+     t = ticket(start)
+-    transition(t, end)
+-    assert t.status is end
++    moved = transition(t, end)
++    assert moved.status is end
++    assert t.status is start  # the argument is left alone
+ 
+ 
+ def test_closed_is_final():
+diff --git a/tickets/workflow.py b/tickets/workflow.py
+--- a/tickets/workflow.py
++++ b/tickets/workflow.py
+@@ -2,6 +2,8 @@
+ 
+ from __future__ import annotations
+ 
++from dataclasses import replace
++
+ from .models import Status, Ticket
+ 
+ ALLOWED: dict[Status, set[Status]] = {
+@@ -16,8 +18,8 @@ class InvalidTransition(Exception):
+     """The requested status change is not allowed from the current status."""
+ 
+ 
+-def transition(ticket: Ticket, new_status: Status) -> None:
+-    """Move a ticket to `new_status`, or raise InvalidTransition."""
++def transition(ticket: Ticket, new_status: Status) -> Ticket:
++    """Return a copy of `ticket` moved to `new_status`, or raise InvalidTransition. The argument is not modified."""
+     if new_status not in ALLOWED[ticket.status]:
+         raise InvalidTransition(f"cannot go from {ticket.status.value} to {new_status.value}")
+-    ticket.status = new_status
++    return replace(ticket, status=new_status)

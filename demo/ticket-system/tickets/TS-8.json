@@ -1,0 +1,10 @@
+{
+  "key": "TS-8",
+  "title": "Workflow transitions must not modify their input",
+  "description": "Functions that change objects in place caused surprises elsewhere.",
+  "acceptance_criteria": [
+    "transition returns a new ticket with the new status.",
+    "The ticket passed to transition is not modified.",
+    "A change that the workflow does not allow still raises InvalidTransition."
+  ]
+}

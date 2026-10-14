@@ -1,6 +1,6 @@
 # Agent de revue de code : Pull Request vs exigences du ticket
 
-Prototype d'agent d'assistance à la revue de code (projet de session MGL805, ÉTS).
+Prototype d'agent d'assistance à la revue de code.
 L'agent lit une Pull Request (diff + description) et les exigences d'un ticket, interroge un
 modèle de langage **à poids ouverts** via Ollama, puis produit des constats structurés
 (fichier, ligne, preuves citées) dans un rapport JSON et Markdown.
@@ -22,7 +22,7 @@ modèle de langage **à poids ouverts** via Ollama, puis produit des constats st
 | **Analyse statique** (Ruff + Bandit, Python) : avertissements déterministes sur les lignes modifiées, fusionnés avec les constats du modèle et fournis aux passes comme pistes | Fait, testé avec les vrais outils et sur une vraie PR (pallets/click) |
 | **Règles d'équipe** (`.review-agent/rules.md` lu sur la branche de base, ou `--rules`) vérifiées par une passe dédiée | Fait, testé (modèle simulé) et sur 4 exécutions réelles |
 | **Profil du changement** (taille, tests modifiés ou non, zones sensibles, dépendances, CI), sans modèle | Fait, testé |
-| **Contexte du dépôt** (graphe de code léger, Python) : pour chaque fonction modifiée, ses appelants, les fonctions qu'elle appelle, les tests qui la mentionnent et le constructeur de sa classe, trouvés avec `ast` dans une seule archive téléchargée | Fait, testé (simulation) et essayé sur les PR de démonstration. Effet **mesuré sur 6 PR seulement** : voir `evaluation/results/context-ablation/` |
+| **Contexte du dépôt** (graphe de code léger, Python) : pour chaque fonction modifiée, ses appelants, les fonctions qu'elle appelle, les tests qui la mentionnent et le constructeur de sa classe, trouvés avec `ast` dans une seule archive téléchargée | Fait, testé (simulation) et essayé sur les PR de démonstration. Effet **mesuré sur 6 + 3 PR seulement** : aucun effet quand le défaut est visible dans le diff, nette amélioration (9 trouvés sur 9 contre 2 sur 9) sur 3 PR conçues pour que le défaut soit hors du diff : voir `evaluation/results/context-ablation/` et `evaluation/results/context-dependent/` |
 | **Profils de modèles** (`--profile`) : Ollama local ou cloud, Qwen2.5-Coder via un service hébergé compatible OpenAI (OpenRouter) | Fait. **Exécutions réelles** de Qwen2.5-Coder 32B et Qwen3-Coder 30B via OpenRouter sur la PR de démonstration (voir `docs/model-comparison-notes.md`). Qwen local (Ollama) **pas encore exécuté** |
 | Suivi en direct (événements dans le terminal et `events.jsonl`) et interface web locale (liste des revues, rapport, constats, chronologie, accepter / rejeter chaque constat, lancer une revue de PR) | Fait, testé (serveur réel en local, page vérifiée dans un vrai navigateur) |
 | Lecture d'une Pull Request GitHub (lecture seule, révision exacte enregistrée) | Fait, testé avec simulation et avec l'API réelle (lecture seulement) |
@@ -320,8 +320,9 @@ Détail : `evaluation/results/dev-eval1.md`.
 - L'analyse statique ne couvre que Python pour l'instant, et seulement les fichiers modifiés disponibles en entier (limite de 500 000 caractères par fichier).
   Le banc d'essai (22 cas) est aussi 100 % Python : la qualité sur TypeScript, Java, etc. n'a **pas été mesurée** (les passes du modèle lisent le diff
   et fonctionnent sans analyse statique, mais sans mesure on ne peut rien affirmer).
-- Le contexte du dépôt n'a pas montré d'effet mesurable sur les 6 PR de démonstration (les défauts y sont visibles dans le diff) : il faut des cas où le défaut
-  n'apparaît qu'avec le code environnant. Il ajoute environ 14 % de jetons en entrée. Appels trouvés par nom (peuvent désigner la mauvaise fonction), Python seulement.
+- Le contexte du dépôt : aucun effet sur les 6 PR de démonstration (défauts visibles dans le diff) ; sur 3 PR **que nous avons conçues** pour que le défaut soit hors du diff,
+  9 défauts trouvés sur 9 avec contexte contre 2 sur 9 sans (3 exécutions chacune, un seul modèle, lecture non à l'aveugle). Cela montre que la fonction sert quand elle est nécessaire,
+  pas à quelle fréquence de vraies PR en ont besoin. Elle ajoute environ 14 % de jetons en entrée ; appels trouvés par nom (peuvent désigner la mauvaise fonction) ; Python seulement.
 - Le pipeline multi-passes (défaut) **n'a pas encore été évalué** sur le banc d'essai : tous les résultats chiffrés ci-dessous viennent du pipeline à une seule passe (`--pipeline single`).
   La vérification peut aussi écarter à tort un vrai constat (il reste visible dans « Dismissed by verification »).
 - Le modèle n'est pas déterministe, même à température 0 : répéter les exécutions (`--repeat`).

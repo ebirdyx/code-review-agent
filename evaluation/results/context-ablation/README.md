@@ -55,5 +55,5 @@ again as a separate finding.
 
 The demo pull requests cannot show the value of repository context, because every planted defect is in the diff. A fair test
 needs pull requests whose defect is visible only with the surrounding code, for example a change to a function's return value,
-exception or argument order that a caller or a test relies on, or a "fix" that makes an existing test meaningless. That is
-the next step before claiming anything about context.
+exception or argument order that a caller or a test relies on, or a "fix" that makes an existing test meaningless. That test was
+then done: see `../context-dependent/README.md` (2 of 9 found without context, 9 of 9 with it).

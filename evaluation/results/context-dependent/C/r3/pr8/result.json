@@ -1,0 +1,218 @@
+{
+  "status": "completed",
+  "findings": [
+    {
+      "category": "logic_defect",
+      "severity": "high",
+      "file": "tickets/service.py",
+      "line": 43,
+      "title": "Service does not use the new Ticket returned by transition",
+      "explanation": "After the workflow change, `transition` returns a new Ticket instead of mutating the original. The `change_status` method in `tickets/service.py` still calls `transition(ticket, new_status)` without capturing the returned Ticket, then saves and returns the original unmodified ticket. This results in the status not being updated in persisted data, breaking the intended behavior.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "    def change_status(self, ticket_id: int, new_status: Status) -> Ticket:\n        ticket = self.get(ticket_id)\n        transition(ticket, new_status)\n        self.store.save(ticket)\n        return ticket"
+        }
+      ],
+      "found_by": [
+        "defects"
+      ],
+      "verification": "supported",
+      "verification_note": "The `change_status` method in tickets/service.py calls `transition(ticket, new_status)` without assigning its returned Ticket, then saves and returns the original ticket, so the status change is not persisted.",
+      "source": "llm"
+    }
+  ],
+  "limitations": [
+    "The definition of the Ticket dataclass (including its fields and any sensitive data it may contain) is not provided, so we cannot assess whether returning a shallow copy via dataclasses.replace could expose or leak sensitive information."
+  ],
+  "error": null,
+  "run": {
+    "revision": {
+      "repository": "ebirdyx/ticket-system-demo",
+      "pr_number": 8,
+      "url": "https://github.com/ebirdyx/ticket-system-demo/pull/8",
+      "base_sha": "31011419c5a58b58220c9be837409de5616c9a2f",
+      "head_sha": "86b5142f50496cc8cca3af7db2ba917962ad6338"
+    },
+    "case_id": "ebirdyx-ticket-system-demo-pr8-86b5142",
+    "created_at": "2026-10-14T04:58:13+00:00",
+    "prompt_version": "multi_v4",
+    "model": "gpt-oss:120b",
+    "host": "https://ollama.com",
+    "duration_s": 10.251,
+    "prompt_tokens": 18820,
+    "completion_tokens": 3304,
+    "ticket": "TS-8: Workflow transitions must not modify their input"
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [],
+  "problems": [],
+  "duplicates_removed": 0,
+  "pipeline": "multi",
+  "passes": [
+    {
+      "name": "compliance",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 3.47,
+      "prompt_tokens": 4314,
+      "completion_tokens": 1090,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "defects",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 1.91,
+      "prompt_tokens": 3709,
+      "completion_tokens": 583,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "security",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.11,
+      "prompt_tokens": 3643,
+      "completion_tokens": 601,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "standards",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 1.94,
+      "prompt_tokens": 3716,
+      "completion_tokens": 538,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "verify",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 1.51,
+      "prompt_tokens": 3438,
+      "completion_tokens": 492,
+      "findings": 0,
+      "message": ""
+    }
+  ],
+  "criteria": [
+    {
+      "number": 1,
+      "text": "transition returns a new ticket with the new status.",
+      "verdict": "met",
+      "explanation": "The `transition` function now returns a new Ticket instance with the new status.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def transition(ticket: Ticket, new_status: Status) -> Ticket:"
+        },
+        {
+          "source": "code",
+          "quote": "return replace(ticket, status=new_status)"
+        },
+        {
+          "source": "code",
+          "quote": "moved = transition(t, end)"
+        },
+        {
+          "source": "code",
+          "quote": "assert moved.status is end"
+        }
+      ],
+      "file": "tickets/workflow.py",
+      "line": 25,
+      "severity": "medium"
+    },
+    {
+      "number": 2,
+      "text": "The ticket passed to transition is not modified.",
+      "verdict": "met",
+      "explanation": "The original ticket object is left unchanged; a copy is returned instead.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "return replace(ticket, status=new_status)"
+        },
+        {
+          "source": "code",
+          "quote": "assert t.status is start  # the argument is left alone"
+        }
+      ],
+      "file": "tests/test_workflow.py",
+      "line": 16,
+      "severity": "medium"
+    },
+    {
+      "number": 3,
+      "text": "A change that the workflow does not allow still raises InvalidTransition.",
+      "verdict": "met",
+      "explanation": "When a disallowed status transition is attempted, `InvalidTransition` is raised.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "if new_status not in ALLOWED[ticket.status]:"
+        },
+        {
+          "source": "code",
+          "quote": "raise InvalidTransition(f\"cannot go from {ticket.status.value} to {new_status.value}\")"
+        },
+        {
+          "source": "code",
+          "quote": "with pytest.raises(InvalidTransition):"
+        }
+      ],
+      "file": "tickets/workflow.py",
+      "line": 24,
+      "severity": "medium"
+    }
+  ],
+  "dismissed": [],
+  "tools": [
+    {
+      "name": "ruff",
+      "version": "0.17.0",
+      "status": "ok",
+      "message": "",
+      "files_checked": 2,
+      "total_findings": 0,
+      "findings_on_changed_lines": 0,
+      "duration_s": 0.86
+    },
+    {
+      "name": "bandit",
+      "version": "1.9.4",
+      "status": "ok",
+      "message": "2 warning(s) in test files were ignored (noise in tests)",
+      "files_checked": 2,
+      "total_findings": 0,
+      "findings_on_changed_lines": 0,
+      "duration_s": 2.36
+    }
+  ],
+  "change_profile": {
+    "files_changed": 2,
+    "lines_added": 8,
+    "lines_removed": 5,
+    "languages": {
+      ".py": 2
+    },
+    "source_files": 1,
+    "test_files": 1,
+    "hints": []
+  },
+  "context": [
+    "`transition` (tickets/workflow.py) is called by 1 other repository function(s) and mentioned in 3 test function(s) (1 added or changed by this change).",
+    "caller of `transition`: tickets/service.py:41-45 (`TicketService.change_status`)",
+    "test of `transition`: tests/test_workflow.py:19-22 (`test_closed_is_final`)",
+    "test of `transition`: tests/test_workflow.py:25-27 (`test_open_cannot_jump_to_resolved`)"
+  ]
+}

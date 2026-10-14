@@ -1,0 +1,9 @@
+{
+  "key": "TS-7",
+  "title": "The store reports an unknown ticket id with an error",
+  "description": "Returning None for a missing ticket hides mistakes at the storage layer.",
+  "acceptance_criteria": [
+    "TicketStore.get raises KeyError for a ticket id that does not exist, instead of returning None.",
+    "TicketStore.get still returns the ticket when it exists."
+  ]
+}

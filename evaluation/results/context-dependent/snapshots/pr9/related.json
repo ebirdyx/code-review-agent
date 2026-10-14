@@ -1,0 +1,52 @@
+{
+  "snippets": [
+    {
+      "path": "tests/test_service.py",
+      "start_line": 14,
+      "end_line": 17,
+      "kind": "test",
+      "symbol": "TicketService.create_ticket",
+      "name": "test_create_ticket_is_open_and_gets_an_id",
+      "text": "def test_create_ticket_is_open_and_gets_an_id(service):\n    ticket = service.create_ticket(\"  Printer is broken \", \"It jams.\", \"alice\")\n    assert ticket.id >= 1 and ticket.status is Status.OPEN and ticket.title == \"Printer is broken\"\n    assert ticket.priority is Priority.MEDIUM"
+    },
+    {
+      "path": "tickets/service.py",
+      "start_line": 17,
+      "end_line": 18,
+      "kind": "class",
+      "symbol": "TicketService.create_ticket",
+      "name": "TicketService.__init__",
+      "text": "    def __init__(self, store: TicketStore):\n        self.store = store"
+    },
+    {
+      "path": "tickets/store.py",
+      "start_line": 30,
+      "end_line": 40,
+      "kind": "callee",
+      "symbol": "TicketService.create_ticket",
+      "name": "TicketStore.add",
+      "text": "    def add(self, ticket: Ticket) -> Ticket:\n        \"\"\"Insert a ticket and return it with its new id.\"\"\"\n        cursor = self._db.execute(\n            \"INSERT INTO tickets (title, description, reporter, priority, status, assignee, created_at)\"\n            \" VALUES (?, ?, ?, ?, ?, ?, ?)\",\n            (ticket.title, ticket.description, ticket.reporter, ticket.priority.value, ticket.status.value,\n             ticket.assignee, ticket.created_at.isoformat()),\n        )\n        self._db.commit()\n        ticket.id = cursor.lastrowid\n        return ticket"
+    },
+    {
+      "path": "tests/test_service.py",
+      "start_line": 20,
+      "end_line": 23,
+      "kind": "test",
+      "symbol": "TicketService.create_ticket",
+      "name": "test_a_title_is_required",
+      "text": "@pytest.mark.parametrize(\"title\", [\"\", \"   \"])\ndef test_a_title_is_required(service, title):\n    with pytest.raises(ValueError, match=\"needs a title\"):\n        service.create_ticket(title, \"\", \"alice\")"
+    },
+    {
+      "path": "tests/test_service.py",
+      "start_line": 26,
+      "end_line": 29,
+      "kind": "test",
+      "symbol": "TicketService.create_ticket",
+      "name": "test_title_length_limit_is_inclusive",
+      "text": "def test_title_length_limit_is_inclusive(service):\n    assert service.create_ticket(\"x\" * MAX_TITLE, \"\", \"alice\")\n    with pytest.raises(ValueError, match=\"longer than\"):\n        service.create_ticket(\"x\" * (MAX_TITLE + 1), \"\", \"alice\")"
+    }
+  ],
+  "facts": [
+    "`TicketService.create_ticket` (tickets/service.py) is called by 0 other repository function(s) and mentioned in 5 test function(s)."
+  ]
+}

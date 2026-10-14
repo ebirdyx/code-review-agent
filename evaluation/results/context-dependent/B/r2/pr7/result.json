@@ -1,0 +1,151 @@
+{
+  "status": "completed",
+  "findings": [],
+  "limitations": [],
+  "error": null,
+  "run": {
+    "revision": {
+      "repository": "ebirdyx/ticket-system-demo",
+      "pr_number": 7,
+      "url": "https://github.com/ebirdyx/ticket-system-demo/pull/7",
+      "base_sha": "31011419c5a58b58220c9be837409de5616c9a2f",
+      "head_sha": "a8fc214d01f07394b509d16ef58e2fcdf89d19b2"
+    },
+    "case_id": "ebirdyx-ticket-system-demo-pr7-a8fc214",
+    "created_at": "2026-10-14T04:54:30+00:00",
+    "prompt_version": "multi_v4",
+    "model": "gpt-oss:120b",
+    "host": "https://ollama.com",
+    "duration_s": 6.385,
+    "prompt_tokens": 15734,
+    "completion_tokens": 1994,
+    "ticket": "TS-7: The store reports an unknown ticket id with an error"
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [],
+  "problems": [],
+  "duplicates_removed": 0,
+  "pipeline": "multi",
+  "passes": [
+    {
+      "name": "compliance",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 1.78,
+      "prompt_tokens": 4402,
+      "completion_tokens": 727,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "defects",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 1.95,
+      "prompt_tokens": 3797,
+      "completion_tokens": 482,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "security",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 1.62,
+      "prompt_tokens": 3731,
+      "completion_tokens": 348,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "standards",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 1.59,
+      "prompt_tokens": 3804,
+      "completion_tokens": 437,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "verify",
+      "status": "skipped",
+      "model": "",
+      "duration_s": null,
+      "prompt_tokens": null,
+      "completion_tokens": null,
+      "findings": 0,
+      "message": "no model-reported candidate findings to verify"
+    }
+  ],
+  "criteria": [
+    {
+      "number": 1,
+      "text": "TicketStore.get raises KeyError for a ticket id that does not exist, instead of returning None.",
+      "verdict": "met",
+      "explanation": "The updated get method raises a KeyError when the queried ticket id does not exist.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "if row is None:\n    raise KeyError(ticket_id)"
+        }
+      ],
+      "file": "tickets/store.py",
+      "line": 46,
+      "severity": "medium"
+    },
+    {
+      "number": 2,
+      "text": "TicketStore.get still returns the ticket when it exists.",
+      "verdict": "met",
+      "explanation": "When a ticket exists, the get method returns the Ticket object constructed from the database row.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "return _from_row(row)"
+        }
+      ],
+      "file": "tickets/store.py",
+      "line": 47,
+      "severity": "medium"
+    }
+  ],
+  "dismissed": [],
+  "tools": [
+    {
+      "name": "ruff",
+      "version": "0.17.0",
+      "status": "ok",
+      "message": "",
+      "files_checked": 2,
+      "total_findings": 0,
+      "findings_on_changed_lines": 0,
+      "duration_s": 0.8
+    },
+    {
+      "name": "bandit",
+      "version": "1.9.4",
+      "status": "ok",
+      "message": "4 warning(s) in test files were ignored (noise in tests)",
+      "files_checked": 2,
+      "total_findings": 0,
+      "findings_on_changed_lines": 0,
+      "duration_s": 2.36
+    }
+  ],
+  "change_profile": {
+    "files_changed": 2,
+    "lines_added": 9,
+    "lines_removed": 3,
+    "languages": {
+      ".py": 2
+    },
+    "source_files": 1,
+    "test_files": 1,
+    "hints": []
+  },
+  "context": []
+}

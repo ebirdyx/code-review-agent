@@ -1,0 +1,79 @@
+{
+  "snippets": [
+    {
+      "path": "tickets/service.py",
+      "start_line": 29,
+      "end_line": 33,
+      "kind": "caller",
+      "symbol": "TicketStore.get",
+      "name": "TicketService.get",
+      "text": "    def get(self, ticket_id: int) -> Ticket:\n        ticket = self.store.get(ticket_id)\n        if ticket is None:\n            raise TicketNotFound(ticket_id)\n        return ticket"
+    },
+    {
+      "path": "tests/test_service.py",
+      "start_line": 32,
+      "end_line": 35,
+      "kind": "test",
+      "symbol": "TicketStore.get",
+      "name": "test_assign_persists",
+      "text": "def test_assign_persists(service):\n    ticket = service.create_ticket(\"t\", \"\", \"alice\")\n    service.assign(ticket.id, \"bob\")\n    assert service.get(ticket.id).assignee == \"bob\""
+    },
+    {
+      "path": "tickets/store.py",
+      "start_line": 25,
+      "end_line": 28,
+      "kind": "class",
+      "symbol": "TicketStore.get",
+      "name": "TicketStore.__init__",
+      "text": "    def __init__(self, path: str = \":memory:\"):\n        self._db = sqlite3.connect(path)\n        self._db.row_factory = sqlite3.Row\n        self._db.execute(SCHEMA)"
+    },
+    {
+      "path": "tickets/store.py",
+      "start_line": 67,
+      "end_line": 72,
+      "kind": "callee",
+      "symbol": "TicketStore.get",
+      "name": "_from_row",
+      "text": "def _from_row(row: sqlite3.Row) -> Ticket:\n    return Ticket(\n        id=row[\"id\"], title=row[\"title\"], description=row[\"description\"], reporter=row[\"reporter\"],\n        priority=Priority(row[\"priority\"]), status=Status(row[\"status\"]), assignee=row[\"assignee\"],\n        created_at=datetime.fromisoformat(row[\"created_at\"]),\n    )"
+    },
+    {
+      "path": "tickets/service.py",
+      "start_line": 35,
+      "end_line": 39,
+      "kind": "caller",
+      "symbol": "TicketStore.get",
+      "name": "TicketService.assign",
+      "text": "    def assign(self, ticket_id: int, assignee: str) -> Ticket:\n        ticket = self.get(ticket_id)\n        ticket.assignee = assignee\n        self.store.save(ticket)\n        return ticket"
+    },
+    {
+      "path": "tests/test_service.py",
+      "start_line": 38,
+      "end_line": 40,
+      "kind": "test",
+      "symbol": "TicketStore.get",
+      "name": "test_unknown_ticket",
+      "text": "def test_unknown_ticket(service):\n    with pytest.raises(TicketNotFound):\n        service.get(999)"
+    },
+    {
+      "path": "tickets/service.py",
+      "start_line": 41,
+      "end_line": 45,
+      "kind": "caller",
+      "symbol": "TicketStore.get",
+      "name": "TicketService.change_status",
+      "text": "    def change_status(self, ticket_id: int, new_status: Status) -> Ticket:\n        ticket = self.get(ticket_id)\n        transition(ticket, new_status)\n        self.store.save(ticket)\n        return ticket"
+    },
+    {
+      "path": "tests/test_service.py",
+      "start_line": 43,
+      "end_line": 49,
+      "kind": "test",
+      "symbol": "TicketStore.get",
+      "name": "test_status_follows_the_workflow",
+      "text": "def test_status_follows_the_workflow(service):\n    ticket = service.create_ticket(\"t\", \"\", \"alice\")\n    service.change_status(ticket.id, Status.IN_PROGRESS)\n    service.change_status(ticket.id, Status.RESOLVED)\n    assert service.get(ticket.id).status is Status.RESOLVED\n    with pytest.raises(InvalidTransition):\n        service.change_status(ticket.id, Status.IN_PROGRESS)"
+    }
+  ],
+  "facts": [
+    "`TicketStore.get` (tickets/store.py) is called by 3 other repository function(s) and mentioned in 4 test function(s) (1 added or changed by this change)."
+  ]
+}

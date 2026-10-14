@@ -1,0 +1,34 @@
+{
+  "snippets": [
+    {
+      "path": "tickets/service.py",
+      "start_line": 41,
+      "end_line": 45,
+      "kind": "caller",
+      "symbol": "transition",
+      "name": "TicketService.change_status",
+      "text": "    def change_status(self, ticket_id: int, new_status: Status) -> Ticket:\n        ticket = self.get(ticket_id)\n        transition(ticket, new_status)\n        self.store.save(ticket)\n        return ticket"
+    },
+    {
+      "path": "tests/test_workflow.py",
+      "start_line": 19,
+      "end_line": 22,
+      "kind": "test",
+      "symbol": "transition",
+      "name": "test_closed_is_final",
+      "text": "def test_closed_is_final():\n    for target in Status:\n        with pytest.raises(InvalidTransition):\n            transition(ticket(Status.CLOSED), target)"
+    },
+    {
+      "path": "tests/test_workflow.py",
+      "start_line": 25,
+      "end_line": 27,
+      "kind": "test",
+      "symbol": "transition",
+      "name": "test_open_cannot_jump_to_resolved",
+      "text": "def test_open_cannot_jump_to_resolved():\n    with pytest.raises(InvalidTransition, match=\"open to resolved\"):\n        transition(ticket(Status.OPEN), Status.RESOLVED)"
+    }
+  ],
+  "facts": [
+    "`transition` (tickets/workflow.py) is called by 1 other repository function(s) and mentioned in 3 test function(s) (1 added or changed by this change)."
+  ]
+}

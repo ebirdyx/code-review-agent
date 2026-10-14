@@ -1,0 +1,169 @@
+{
+  "status": "completed",
+  "findings": [],
+  "limitations": [
+    "Ticket class definition is not provided, so cannot confirm that dataclasses.replace works correctly with it.",
+    "The definition of the Ticket dataclass is not provided, so we cannot assess whether copying it with replace could inadvertently expose or mishandle sensitive fields."
+  ],
+  "error": null,
+  "run": {
+    "revision": {
+      "repository": "ebirdyx/ticket-system-demo",
+      "pr_number": 8,
+      "url": "https://github.com/ebirdyx/ticket-system-demo/pull/8",
+      "base_sha": "31011419c5a58b58220c9be837409de5616c9a2f",
+      "head_sha": "86b5142f50496cc8cca3af7db2ba917962ad6338"
+    },
+    "case_id": "ebirdyx-ticket-system-demo-pr8-86b5142",
+    "created_at": "2026-10-14T04:52:55+00:00",
+    "prompt_version": "multi_v4",
+    "model": "gpt-oss:120b",
+    "host": "https://ollama.com",
+    "duration_s": 9.333,
+    "prompt_tokens": 14114,
+    "completion_tokens": 2212,
+    "ticket": "TS-8: Workflow transitions must not modify their input"
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [],
+  "problems": [],
+  "duplicates_removed": 0,
+  "pipeline": "multi",
+  "passes": [
+    {
+      "name": "compliance",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.92,
+      "prompt_tokens": 3997,
+      "completion_tokens": 831,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "defects",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 3.58,
+      "prompt_tokens": 3392,
+      "completion_tokens": 694,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "security",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 1.7,
+      "prompt_tokens": 3326,
+      "completion_tokens": 293,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "standards",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 1.69,
+      "prompt_tokens": 3399,
+      "completion_tokens": 394,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "verify",
+      "status": "skipped",
+      "model": "",
+      "duration_s": null,
+      "prompt_tokens": null,
+      "completion_tokens": null,
+      "findings": 0,
+      "message": "no model-reported candidate findings to verify"
+    }
+  ],
+  "criteria": [
+    {
+      "number": 1,
+      "text": "transition returns a new ticket with the new status.",
+      "verdict": "met",
+      "explanation": "The transition function returns a new Ticket instance with the new status using dataclasses.replace.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "return replace(ticket, status=new_status)"
+        }
+      ],
+      "file": "tickets/workflow.py",
+      "line": 25,
+      "severity": "medium"
+    },
+    {
+      "number": 2,
+      "text": "The ticket passed to transition is not modified.",
+      "verdict": "met",
+      "explanation": "The original ticket object is not modified; tests verify the original status remains unchanged.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "assert t.status is start  # the argument is left alone"
+        }
+      ],
+      "file": "tests/test_workflow.py",
+      "line": 16,
+      "severity": "medium"
+    },
+    {
+      "number": 3,
+      "text": "A change that the workflow does not allow still raises InvalidTransition.",
+      "verdict": "met",
+      "explanation": "InvalidTransition is raised when a disallowed status change is attempted.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "raise InvalidTransition(f\"cannot go from {ticket.status.value} to {new_status.value}\")"
+        }
+      ],
+      "file": "tickets/workflow.py",
+      "line": 23,
+      "severity": "medium"
+    }
+  ],
+  "dismissed": [],
+  "tools": [
+    {
+      "name": "ruff",
+      "version": "0.17.0",
+      "status": "ok",
+      "message": "",
+      "files_checked": 2,
+      "total_findings": 0,
+      "findings_on_changed_lines": 0,
+      "duration_s": 0.81
+    },
+    {
+      "name": "bandit",
+      "version": "1.9.4",
+      "status": "ok",
+      "message": "2 warning(s) in test files were ignored (noise in tests)",
+      "files_checked": 2,
+      "total_findings": 0,
+      "findings_on_changed_lines": 0,
+      "duration_s": 2.34
+    }
+  ],
+  "change_profile": {
+    "files_changed": 2,
+    "lines_added": 8,
+    "lines_removed": 5,
+    "languages": {
+      ".py": 2
+    },
+    "source_files": 1,
+    "test_files": 1,
+    "hints": []
+  },
+  "context": []
+}

@@ -1,0 +1,196 @@
+{
+  "status": "completed",
+  "findings": [
+    {
+      "category": "security",
+      "severity": "high",
+      "file": "tickets/store.py",
+      "line": 45,
+      "title": "Uncaught KeyError from TicketStore.get can leak information and cause denial of service",
+      "explanation": "TicketStore.get now raises KeyError for a missing ticket id, but callers such as tickets.service.Service.get still expect a None return and handle it; the KeyError propagates uncaught, potentially exposing internal IDs and causing a 500 error for attacker-supplied ids.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "if row is None:\n            raise KeyError(ticket_id)\n        return _from_row(row)"
+        },
+        {
+          "source": "code",
+          "quote": "def get(self, ticket_id: int) -> Ticket:\n        ticket = self.store.get(ticket_id)\n        if ticket is None:\n            raise TicketNotFound(ticket_id)\n        return ticket"
+        }
+      ],
+      "found_by": [
+        "security"
+      ],
+      "verification": "supported",
+      "verification_note": "TicketStore.get now raises KeyError for missing IDs, but tickets/service.Service.get still checks for a None return and does not catch KeyError, so the exception will propagate uncaught.",
+      "source": "llm"
+    }
+  ],
+  "limitations": [
+    "Cannot assess whether raising KeyError in TicketStore.get breaks existing callers (e.g., service layer) because the caller code is not provided in the allowed sources."
+  ],
+  "error": null,
+  "run": {
+    "revision": {
+      "repository": "ebirdyx/ticket-system-demo",
+      "pr_number": 7,
+      "url": "https://github.com/ebirdyx/ticket-system-demo/pull/7",
+      "base_sha": "31011419c5a58b58220c9be837409de5616c9a2f",
+      "head_sha": "a8fc214d01f07394b509d16ef58e2fcdf89d19b2"
+    },
+    "case_id": "ebirdyx-ticket-system-demo-pr7-a8fc214",
+    "created_at": "2026-10-14T04:55:25+00:00",
+    "prompt_version": "multi_v4",
+    "model": "gpt-oss:120b",
+    "host": "https://ollama.com",
+    "duration_s": 13.827,
+    "prompt_tokens": 23373,
+    "completion_tokens": 4050,
+    "ticket": "TS-7: The store reports an unknown ticket id with an error"
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [],
+  "problems": [],
+  "duplicates_removed": 0,
+  "pipeline": "multi",
+  "passes": [
+    {
+      "name": "compliance",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.64,
+      "prompt_tokens": 5224,
+      "completion_tokens": 766,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "defects",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 4.14,
+      "prompt_tokens": 4619,
+      "completion_tokens": 1065,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "security",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 3.31,
+      "prompt_tokens": 4553,
+      "completion_tokens": 851,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "standards",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 1.69,
+      "prompt_tokens": 4626,
+      "completion_tokens": 554,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "verify",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.73,
+      "prompt_tokens": 4351,
+      "completion_tokens": 814,
+      "findings": 0,
+      "message": ""
+    }
+  ],
+  "criteria": [
+    {
+      "number": 1,
+      "text": "TicketStore.get raises KeyError for a ticket id that does not exist, instead of returning None.",
+      "verdict": "met",
+      "explanation": "TicketStore.get now raises KeyError when the ticket id does not exist.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def get(self, ticket_id: int) -> Ticket:\n    \"\"\"Return the ticket with this id. Raises KeyError if there is none.\"\"\"\n    row = self._db.execute(\"SELECT * FROM tickets WHERE id = ?\", (ticket_id,)).fetchone()\n    if row is None:\n        raise KeyError(ticket_id)\n    return _from_row(row)"
+        },
+        {
+          "source": "code",
+          "quote": "with pytest.raises(KeyError):\n    store.get(12345)"
+        }
+      ],
+      "file": "tickets/store.py",
+      "line": 42,
+      "severity": "medium"
+    },
+    {
+      "number": 2,
+      "text": "TicketStore.get still returns the ticket when it exists.",
+      "verdict": "met",
+      "explanation": "TicketStore.get returns the ticket object when the id exists.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "return _from_row(row)"
+        },
+        {
+          "source": "code",
+          "quote": "assert store.get(added.id).title == \"Login fails\""
+        }
+      ],
+      "file": "tickets/store.py",
+      "line": 47,
+      "severity": "medium"
+    }
+  ],
+  "dismissed": [],
+  "tools": [
+    {
+      "name": "ruff",
+      "version": "0.17.0",
+      "status": "ok",
+      "message": "",
+      "files_checked": 2,
+      "total_findings": 0,
+      "findings_on_changed_lines": 0,
+      "duration_s": 0.78
+    },
+    {
+      "name": "bandit",
+      "version": "1.9.4",
+      "status": "ok",
+      "message": "4 warning(s) in test files were ignored (noise in tests)",
+      "files_checked": 2,
+      "total_findings": 0,
+      "findings_on_changed_lines": 0,
+      "duration_s": 2.36
+    }
+  ],
+  "change_profile": {
+    "files_changed": 2,
+    "lines_added": 9,
+    "lines_removed": 3,
+    "languages": {
+      ".py": 2
+    },
+    "source_files": 1,
+    "test_files": 1,
+    "hints": []
+  },
+  "context": [
+    "`TicketStore.get` (tickets/store.py) is called by 3 other repository function(s) and mentioned in 4 test function(s) (1 added or changed by this change).",
+    "caller of `TicketStore.get`: tickets/service.py:29-33 (`TicketService.get`)",
+    "test of `TicketStore.get`: tests/test_service.py:32-35 (`test_assign_persists`)",
+    "class of `TicketStore.get`: tickets/store.py:25-28 (`TicketStore.__init__`)",
+    "callee of `TicketStore.get`: tickets/store.py:67-72 (`_from_row`)",
+    "caller of `TicketStore.get`: tickets/service.py:35-39 (`TicketService.assign`)",
+    "test of `TicketStore.get`: tests/test_service.py:38-40 (`test_unknown_ticket`)",
+    "caller of `TicketStore.get`: tickets/service.py:41-45 (`TicketService.change_status`)",
+    "test of `TicketStore.get`: tests/test_service.py:43-49 (`test_status_follows_the_workflow`)"
+  ]
+}

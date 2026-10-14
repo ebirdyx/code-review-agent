@@ -85,7 +85,7 @@ Six pull requests with an answer key written beforehand: four planted defects, o
 | 4 | Checklist-consistency check (a criterion MET where a finding sits on its own lines) | both Qwen runs | **Done**, unit-tested with the Qwen case; not yet seen live on a model that makes the mistake |
 | 5 | Verifier must judge rule findings (not call them out of scope) | PR #4 dismissal | Prompt fixed in `multi_v3`; did not recur in the second run |
 | 6 | Live GitHub Actions run on a real repository | not done | needs repository secrets |
-| 7 | Repository context (code graph: callers, callees, tests, class) | beyond-the-diff review in commercial tools | **Done**, tested; first measurement shows no change in detection on the demo (see section 9) |
+| 7 | Repository context (code graph: callers, callees, tests, class) | beyond-the-diff review in commercial tools | **Done**, tested. No effect on diff-visible defects; **clear effect when the defect is outside the diff** (sections 9 and 10) |
 
 ## 8. Second run after the improvements (details in `evaluation/results/ticket-system-demo/README.md`)
 
@@ -107,3 +107,17 @@ Six pull requests with an answer key written beforehand: four planted defects, o
 - Real lesson on method: trying the new module on real branches before any model run found two bugs that would have fed false facts to the model, and
   replaying 18 saved runs showed a merge rule that was too greedy. Offline replay of saved runs is a cheap way to test the deterministic parts.
 - To test context properly we need pull requests whose defect is only visible with the surrounding code. Not built yet.
+
+## 10. When the defect is outside the diff (details in `evaluation/results/context-dependent/README.md`)
+
+The first comparison could not show the value of repository context because every planted defect was visible in the diff. So we built three
+pull requests where it is not (a caller that still expects the old return value, a caller that ignores a new return value, tests that
+no longer match a change), wrote the answer key first, and ran each with and without context three times.
+
+- **Without context: 2 of 9 found. With context: 9 of 9 found.** On the two cases where nothing in the diff shows the problem, 0 of 6 against 6 of 6.
+- Without context the model also invented unrelated worries (a `KeyError` for unknown statuses); with context it named the exact caller.
+- Noise did not disappear: speculative security framings and docstring remarks appear in both configurations.
+- Honest limits: three cases designed by us to need context, three runs each, one model, one reader (not blinded), a tiny repository where name
+  matching is easy. This shows the feature works when it is needed, not how often real pull requests need it.
+- A method note: the first measurement (no effect) was a ceiling effect of easy cases, not evidence against the feature. A result of "no difference" needs
+  a test that could have shown a difference.

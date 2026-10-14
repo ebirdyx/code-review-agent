@@ -1,0 +1,9 @@
+{
+  "key": "TS-9",
+  "title": "Keep ticket titles exactly as typed",
+  "description": "Users complained that their titles were silently changed.",
+  "acceptance_criteria": [
+    "A ticket's title is stored exactly as the user typed it, including surrounding spaces.",
+    "A title is still required and is at most 120 characters."
+  ]
+}

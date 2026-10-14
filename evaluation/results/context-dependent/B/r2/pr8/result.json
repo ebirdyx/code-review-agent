@@ -1,0 +1,194 @@
+{
+  "status": "completed",
+  "findings": [
+    {
+      "category": "error_handling",
+      "severity": "medium",
+      "file": "tickets/workflow.py",
+      "line": 23,
+      "title": "Missing handling for unknown ticket status",
+      "explanation": "The function accesses ALLOWED[ticket.status] without checking that ticket.status is a key in the ALLOWED dictionary. If a Ticket has a status not present in ALLOWED (e.g., a new enum value added without updating ALLOWED), a KeyError will be raised instead of the intended InvalidTransition, causing an unexpected crash.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "if new_status not in ALLOWED[ticket.status]:"
+        },
+        {
+          "source": "code",
+          "quote": "ALLOWED: dict[Status, set[Status]] = {"
+        }
+      ],
+      "found_by": [
+        "defects"
+      ],
+      "verification": "supported",
+      "verification_note": "The `transition` function indexes `ALLOWED[ticket.status]` directly without verifying that `ticket.status` is a key, so an unknown status would raise a KeyError instead of InvalidTransition as claimed.",
+      "source": "llm"
+    }
+  ],
+  "limitations": [
+    "The full definition of the Status enum and Ticket dataclass is not provided, so it is unclear whether all possible Status values are covered by ALLOWED.",
+    "The definition of the Ticket dataclass is not provided, so potential security implications of copying its fields (e.g., containing sensitive data) cannot be fully assessed."
+  ],
+  "error": null,
+  "run": {
+    "revision": {
+      "repository": "ebirdyx/ticket-system-demo",
+      "pr_number": 8,
+      "url": "https://github.com/ebirdyx/ticket-system-demo/pull/8",
+      "base_sha": "31011419c5a58b58220c9be837409de5616c9a2f",
+      "head_sha": "86b5142f50496cc8cca3af7db2ba917962ad6338"
+    },
+    "case_id": "ebirdyx-ticket-system-demo-pr8-86b5142",
+    "created_at": "2026-10-14T04:54:45+00:00",
+    "prompt_version": "multi_v4",
+    "model": "gpt-oss:120b",
+    "host": "https://ollama.com",
+    "duration_s": 9.146,
+    "prompt_tokens": 17206,
+    "completion_tokens": 3261,
+    "ticket": "TS-8: Workflow transitions must not modify their input"
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [],
+  "problems": [],
+  "duplicates_removed": 0,
+  "pipeline": "multi",
+  "passes": [
+    {
+      "name": "compliance",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.34,
+      "prompt_tokens": 3997,
+      "completion_tokens": 829,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "defects",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.75,
+      "prompt_tokens": 3392,
+      "completion_tokens": 996,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "security",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 1.47,
+      "prompt_tokens": 3326,
+      "completion_tokens": 289,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "standards",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 1.61,
+      "prompt_tokens": 3399,
+      "completion_tokens": 512,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "verify",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 1.83,
+      "prompt_tokens": 3092,
+      "completion_tokens": 635,
+      "findings": 0,
+      "message": ""
+    }
+  ],
+  "criteria": [
+    {
+      "number": 1,
+      "text": "transition returns a new ticket with the new status.",
+      "verdict": "met",
+      "explanation": "The `transition` function returns a new Ticket instance with the new status using `replace`, satisfying the requirement to return a new ticket.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "return replace(ticket, status=new_status)"
+        }
+      ],
+      "file": "tickets/workflow.py",
+      "line": 25,
+      "severity": "medium"
+    },
+    {
+      "number": 2,
+      "text": "The ticket passed to transition is not modified.",
+      "verdict": "met",
+      "explanation": "The original ticket object is not modified; the function creates a copy and the test asserts the original status remains unchanged.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "assert t.status is start  # the argument is left alone"
+        }
+      ],
+      "file": "tests/test_workflow.py",
+      "line": 16,
+      "severity": "medium"
+    },
+    {
+      "number": 3,
+      "text": "A change that the workflow does not allow still raises InvalidTransition.",
+      "verdict": "met",
+      "explanation": "When a transition is not allowed, the function raises `InvalidTransition`, matching the acceptance criterion.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "raise InvalidTransition(f\"cannot go from {ticket.status.value} to {new_status.value}\")"
+        }
+      ],
+      "file": "tickets/workflow.py",
+      "line": 24,
+      "severity": "medium"
+    }
+  ],
+  "dismissed": [],
+  "tools": [
+    {
+      "name": "ruff",
+      "version": "0.17.0",
+      "status": "ok",
+      "message": "",
+      "files_checked": 2,
+      "total_findings": 0,
+      "findings_on_changed_lines": 0,
+      "duration_s": 0.81
+    },
+    {
+      "name": "bandit",
+      "version": "1.9.4",
+      "status": "ok",
+      "message": "2 warning(s) in test files were ignored (noise in tests)",
+      "files_checked": 2,
+      "total_findings": 0,
+      "findings_on_changed_lines": 0,
+      "duration_s": 2.38
+    }
+  ],
+  "change_profile": {
+    "files_changed": 2,
+    "lines_added": 8,
+    "lines_removed": 5,
+    "languages": {
+      ".py": 2
+    },
+    "source_files": 1,
+    "test_files": 1,
+    "hints": []
+  },
+  "context": []
+}

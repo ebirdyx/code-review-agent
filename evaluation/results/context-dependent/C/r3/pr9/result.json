@@ -1,0 +1,227 @@
+{
+  "status": "completed",
+  "findings": [
+    {
+      "category": "logic_defect",
+      "severity": "medium",
+      "file": "tickets/service.py",
+      "line": 22,
+      "title": "Title validation does not reject whitespace‑only strings",
+      "explanation": "The function checks `if not title:` to enforce that a title is required. In Python a string containing only spaces is truthy, so titles consisting solely of whitespace bypass this check and are accepted, violating the requirement that a title must be provided (the tests expect a ValueError for such inputs). This leads to tickets with empty‑looking titles being created.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "if not title:\n            raise ValueError(\"a ticket needs a title\")"
+        },
+        {
+          "source": "ticket",
+          "quote": "1. A ticket's title is stored exactly as the user typed it, including surrounding spaces.\n2. A title is still required and is at most 120 characters."
+        },
+        {
+          "source": "code",
+          "quote": "def test_a_title_is_required(service, title):\n    with pytest.raises(ValueError, match=\"needs a title\"):\n        service.create_ticket(title, \"\", \"alice\")"
+        },
+        {
+          "source": "code",
+          "quote": "title = \"   \""
+        }
+      ],
+      "found_by": [
+        "defects"
+      ],
+      "verification": "supported",
+      "verification_note": "The code checks `if not title:` which does not reject whitespace‑only strings, yet the test expects a ValueError for such inputs, confirming the logic defect.",
+      "source": "llm"
+    },
+    {
+      "category": "maintainability",
+      "severity": "low",
+      "file": "tickets/service.py",
+      "line": 21,
+      "title": "Rule: public functions have type hints and a one-line docstring that says what they return or raise",
+      "explanation": "The `create_ticket` public method has a one-line docstring, but it does not mention what the function returns (a Ticket) or the exceptions it may raise, violating the team's documentation rule.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "\"\"\"Create an open ticket. The title is kept exactly as typed; it is required and at most MAX_TITLE characters.\"\"\""
+        },
+        {
+          "source": "rules",
+          "quote": "Public functions have type hints and a one-line docstring that says what they return or raise."
+        }
+      ],
+      "found_by": [
+        "standards"
+      ],
+      "verification": "supported",
+      "verification_note": "The public method `create_ticket` has a one‑line docstring that does not mention its return value or possible exceptions, violating the team rule requiring such documentation.",
+      "source": "llm"
+    }
+  ],
+  "limitations": [
+    "The ticket does not specify whether a title consisting only of spaces satisfies the \"required\" condition, leading to ambiguity for criterion 2.",
+    "The repository code for rendering or otherwise processing ticket titles (e.g., HTML templates, logs, or external APIs) is not provided, so we cannot assess whether storing titles with leading/trailing whitespace or without stripping could lead to injection or XSS vulnerabilities in downstream components."
+  ],
+  "error": null,
+  "run": {
+    "revision": {
+      "repository": "ebirdyx/ticket-system-demo",
+      "pr_number": 9,
+      "url": "https://github.com/ebirdyx/ticket-system-demo/pull/9",
+      "base_sha": "31011419c5a58b58220c9be837409de5616c9a2f",
+      "head_sha": "4046476aaadb8b1d1981e644aa3bdc59af337088"
+    },
+    "case_id": "ebirdyx-ticket-system-demo-pr9-4046476",
+    "created_at": "2026-10-14T04:58:34+00:00",
+    "prompt_version": "multi_v4",
+    "model": "gpt-oss:120b",
+    "host": "https://ollama.com",
+    "duration_s": 15.065,
+    "prompt_tokens": 18333,
+    "completion_tokens": 5129,
+    "ticket": "TS-9: Keep ticket titles exactly as typed"
+  },
+  "coverage": {
+    "complete": true,
+    "omitted": []
+  },
+  "missing_inputs": [],
+  "problems": [
+    {
+      "finding_index": 0,
+      "criterion_index": null,
+      "kind": "quote_not_found",
+      "message": "Quoted code text was not found in the input: \"title = \"   \"\""
+    }
+  ],
+  "duplicates_removed": 0,
+  "pipeline": "multi",
+  "passes": [
+    {
+      "name": "compliance",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 4.12,
+      "prompt_tokens": 4174,
+      "completion_tokens": 1356,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "defects",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.58,
+      "prompt_tokens": 3569,
+      "completion_tokens": 875,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "security",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.34,
+      "prompt_tokens": 3503,
+      "completion_tokens": 515,
+      "findings": 0,
+      "message": ""
+    },
+    {
+      "name": "standards",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 4.48,
+      "prompt_tokens": 3576,
+      "completion_tokens": 1618,
+      "findings": 1,
+      "message": ""
+    },
+    {
+      "name": "verify",
+      "status": "ok",
+      "model": "gpt-oss:120b",
+      "duration_s": 2.3,
+      "prompt_tokens": 3511,
+      "completion_tokens": 765,
+      "findings": 0,
+      "message": ""
+    }
+  ],
+  "criteria": [
+    {
+      "number": 1,
+      "text": "A ticket's title is stored exactly as the user typed it, including surrounding spaces.",
+      "verdict": "met",
+      "explanation": "The create_ticket method no longer strips whitespace from the title and stores the title exactly as received, satisfying the requirement to keep surrounding spaces.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "def create_ticket(self, title: str, description: str, reporter: str, priority: Priority = Priority.MEDIUM) -> Ticket:\n    \"\"\"Create an open ticket. The title is kept exactly as typed; it is required and at most MAX_TITLE characters.\"\"\"\n    if not title:\n        raise ValueError(\"a ticket needs a title\")\n    if len(title) > MAX_TITLE:\n        raise ValueError(f\"the title is longer than {MAX_TITLE} characters\")"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 21,
+      "severity": "medium"
+    },
+    {
+      "number": 2,
+      "text": "A title is still required and is at most 120 characters.",
+      "verdict": "cannot_determine",
+      "explanation": "The ticket requires a title to be \"required\" and at most 120 characters, but does not define whether a title consisting only of whitespace satisfies the \"required\" condition. The code treats any non‑empty string (including whitespace‑only strings) as valid, so it is unclear if this meets the intended requirement.",
+      "evidence": [
+        {
+          "source": "code",
+          "quote": "if not title:\n    raise ValueError(\"a ticket needs a title\")\nif len(title) > MAX_TITLE:\n    raise ValueError(f\"the title is longer than {MAX_TITLE} characters\")"
+        }
+      ],
+      "file": "tickets/service.py",
+      "line": 22,
+      "severity": "medium"
+    }
+  ],
+  "dismissed": [],
+  "tools": [
+    {
+      "name": "ruff",
+      "version": "0.17.0",
+      "status": "ok",
+      "message": "",
+      "files_checked": 1,
+      "total_findings": 0,
+      "findings_on_changed_lines": 0,
+      "duration_s": 0.78
+    },
+    {
+      "name": "bandit",
+      "version": "1.9.4",
+      "status": "ok",
+      "message": "",
+      "files_checked": 1,
+      "total_findings": 0,
+      "findings_on_changed_lines": 0,
+      "duration_s": 2.34
+    }
+  ],
+  "change_profile": {
+    "files_changed": 1,
+    "lines_added": 1,
+    "lines_removed": 2,
+    "languages": {
+      ".py": 1
+    },
+    "source_files": 1,
+    "test_files": 0,
+    "hints": [
+      "1 source file(s) changed but no test file changed."
+    ]
+  },
+  "context": [
+    "`TicketService.create_ticket` (tickets/service.py) is called by 0 other repository function(s) and mentioned in 5 test function(s).",
+    "test of `TicketService.create_ticket`: tests/test_service.py:14-17 (`test_create_ticket_is_open_and_gets_an_id`)",
+    "class of `TicketService.create_ticket`: tickets/service.py:17-18 (`TicketService.__init__`)",
+    "callee of `TicketService.create_ticket`: tickets/store.py:30-40 (`TicketStore.add`)",
+    "test of `TicketService.create_ticket`: tests/test_service.py:20-23 (`test_a_title_is_required`)",
+    "test of `TicketService.create_ticket`: tests/test_service.py:26-29 (`test_title_length_limit_is_inclusive`)"
+  ]
+}

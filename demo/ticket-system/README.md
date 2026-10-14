@@ -28,3 +28,19 @@ The team rules the agent reads from the base branch are in the demo repository's
 - The defects are planted by us, in a small project: this shows the tool working on realistic pull requests, it does not
   measure accuracy. One run per model per pull request.
 - Results of each run are saved in `evaluation/results/ticket-system-demo/` (report, JSON result, comment text).
+
+## Context-dependent pull requests (PRs 7 to 9): the defect is NOT in the diff
+
+Added to test the repository-context feature. Answer key written **before** any run. In each case the diff alone looks
+reasonable; the problem is in code the pull request does not touch (a caller, or existing tests). Each of these pull
+requests leaves the existing tests of `main` failing, as a real incomplete change would.
+
+| PR | Ticket | What the diff changes | The problem, outside the diff | Expected finding |
+|---|---|---|---|---|
+| #7 | TS-7 store raises on unknown id | `TicketStore.get` raises `KeyError` instead of returning `None` | `TicketService.get` still tests `if ticket is None` and raises `TicketNotFound`; now a `KeyError` leaks out and `test_unknown_ticket` fails | mentions the caller (`service.get` / `TicketNotFound` / the `None` check) |
+| #8 | TS-8 transition returns a copy | `workflow.transition` returns an updated copy and no longer mutates its argument | `TicketService.change_status` ignores the return value, so a ticket's status never changes; `test_status_follows_the_workflow` fails | mentions `change_status` or the ignored return value |
+| #9 | TS-9 keep titles as typed | `create_ticket` no longer calls `title.strip()` | the emptiness check relies on it, so whitespace-only titles are now accepted; two existing tests assert stripping and fail | mentions whitespace-only titles or the existing tests that expect stripping |
+
+How it will be run: configurations B (static tools, no repository context) and C (tools plus context), three runs each,
+on identical saved snapshots. "Found" is judged by reading the finding, not only by keywords. Six runs per pull request is
+still a tiny sample, so the result is an indication.
