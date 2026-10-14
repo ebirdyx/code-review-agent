@@ -79,6 +79,7 @@ def _finding_from_criterion(check: CriterionCheck) -> Finding:
         explanation=check.explanation,
         evidence=evidence,
         found_by=["compliance"],
+        criterion=check.number,
     )
 
 

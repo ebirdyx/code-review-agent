@@ -123,9 +123,12 @@ class Finding(StrictModel):
     verification: Literal["supported", "uncertain"] | None = None  # verifier's opinion, if it ran
     verification_note: str = ""
     source: Literal["llm", "tool"] = "llm"  # "tool": backed by a static-analysis finding (not dismissable)
+    # Number of the acceptance criterion this finding says is not met. It makes the finding ticket-backed: when reports
+    # are merged, the requirement leads the headline (see merge.py).
+    criterion: int | None = Field(default=None, ge=1)
 
 
-INTERNAL_FINDING_FIELDS = ("found_by", "verification", "verification_note", "source")
+INTERNAL_FINDING_FIELDS = ("found_by", "verification", "verification_note", "source", "criterion")
 WHOLE_CHANGE = "(whole change)"  # `file` value for a finding about the change as a whole
 
 

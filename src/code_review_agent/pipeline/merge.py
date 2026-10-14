@@ -65,13 +65,25 @@ def _norm(title: str) -> str:
     return " ".join("".join(c if c.isalnum() else " " for c in title.lower()).split())
 
 
+def _headline(a: Finding, b: Finding, default: Finding) -> Finding:
+    """The report whose title and explanation lead a merged finding: the one stating an unmet criterion, if only one does."""
+    if (a.criterion is None) != (b.criterion is None):
+        return a if a.criterion is not None else b
+    return default
+
+
 def merge_candidates(findings: list[Finding]) -> tuple[list[Finding], int]:
     """Fold reports of the same issue into one finding; order by severity.
 
     Two reports are the same issue when they cite the same file and line, whatever their categories, or share
-    file, category and title. The merged finding keeps the more specific category, the higher severity, all
-    evidence, remembers every pass that reported it, and, when the other report comes from another category, adds its
+    file, category and title. The merged finding keeps the more specific category and location, the higher severity,
+    all evidence, remembers every pass that reported it, and, when the other report comes from another category, adds its
     explanation ("Also reported by ...") so a second, different problem on the same line is not hidden.
+
+    Its headline (title and explanation) comes from the report that says an acceptance criterion of the ticket is not met,
+    when exactly one does: the ticket is what the change is judged against, while a model-only worry on the same line is a
+    guess. Without that rule the more specific category won the headline, and a speculative "arbitrary file read" could
+    push a violated requirement down into the small print.
     """
     merged: list[Finding] = []
     for f in findings:
@@ -81,11 +93,15 @@ def merge_candidates(findings: list[Finding]) -> tuple[list[Finding], int]:
             primary, other = (g, f) if _SPECIFICITY.index(g.category) <= _SPECIFICITY.index(f.category) else (f, g)
             seen = {(e.source, e.quote) for e in primary.evidence}
             evidence = list(primary.evidence) + [e for e in other.evidence if (e.source, e.quote) not in seen]
-            explanation = primary.explanation
-            if _norm(other.explanation) not in _norm(explanation) and other.category != primary.category:
-                who = ", ".join(other.found_by) or "another pass"
-                explanation += f" Also reported by {who} as {other.category.value}: {short(other.explanation, 400)}"
+            lead = _headline(g, f, default=primary)
+            follower = f if lead is g else g
+            explanation = lead.explanation
+            if _norm(follower.explanation) not in _norm(explanation) and follower.category != lead.category:
+                who = ", ".join(follower.found_by) or "another pass"
+                explanation += f" Also reported by {who} as {follower.category.value}: {short(follower.explanation, 400)}"
             merged[i] = primary.model_copy(update={
+                "title": lead.title,
+                "criterion": lead.criterion,
                 "severity": min(g.severity, f.severity, key=_SEVERITY_RANK.__getitem__),
                 "explanation": explanation,
                 "evidence": evidence,

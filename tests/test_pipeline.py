@@ -805,3 +805,80 @@ def test_a_criterion_finding_a_few_lines_away_needs_a_shared_subject_too():
     other = with_text(mk("logic_defect", "high", line=44, by="defects"), "Typo in the log message", "The message mentions a file.", quote="c")
     assert len(merge_candidates([criterion, same])[0]) == 1
     assert len(merge_candidates([criterion, other])[0]) == 2
+
+
+# ------------------------------------------- the ticket-backed requirement leads a merged finding
+
+
+def criterion_finding(number=1, line=13, title="Criterion 1 not met: a missing file falls back to the defaults", quote="with open(path) as f:"):
+    f = with_text(mk("requirement_mismatch", "high", line=line, by="compliance", quote=quote), title,
+                  "The function opens the file without handling a missing file and logs no warning.")
+    return f.model_copy(update={"criterion": number})
+
+
+def speculative_security(line=13, quote="with open(path) as f:"):
+    return with_text(mk("security", "high", line=line, by="security", quote=quote), "Unvalidated file path leads to arbitrary file read",
+                     "The path is opened without validation, so any file could be read.")
+
+
+def test_the_violated_requirement_leads_the_headline_over_a_speculative_claim_on_the_same_line():
+    """Seen on load-config: the more specific 'security' category used to win, burying the requirement in the small print."""
+    merged, removed = merge_candidates([criterion_finding(), speculative_security()])
+    assert removed == 1 and len(merged) == 1
+    m = merged[0]
+    assert m.title == "Criterion 1 not met: a missing file falls back to the defaults" and m.criterion == 1
+    assert m.explanation.startswith("The function opens the file without handling a missing file")
+    assert "Also reported by security as security: The path is opened without validation" in m.explanation
+    assert m.category == "security"  # the category still names the most specific angle
+    assert m.found_by == ["compliance", "security"] and m.severity == "high"
+
+
+def test_the_headline_does_not_depend_on_the_order_the_reports_arrive_in():
+    a, _ = merge_candidates([criterion_finding(), speculative_security()])
+    b, _ = merge_candidates([speculative_security(), criterion_finding()])
+    assert (a[0].title, a[0].criterion, a[0].category) == (b[0].title, b[0].criterion, b[0].category)
+    assert a[0].explanation.split(" Also reported by")[0] == b[0].explanation.split(" Also reported by")[0]
+
+
+def test_the_requirement_keeps_the_headline_through_a_three_way_merge():
+    merged, removed = merge_candidates([criterion_finding(), speculative_security(), with_text(mk("error_handling", by="defects", line=13, quote="with open(path) as f:"),
+                                                                                             "No handling for a missing file", "FileNotFoundError is not handled.")])
+    assert removed == 2 and len(merged) == 1 and merged[0].criterion == 1
+    assert merged[0].title.startswith("Criterion 1 not met") and merged[0].category == "security"
+    assert merged[0].found_by == ["compliance", "security", "defects"]
+
+
+def test_a_requirement_leads_a_tool_finding_but_the_finding_stays_tool_backed():
+    tool = with_text(mk("security", by="bandit", line=13, quote="with open(path) as f:"), "bandit B110: Try, Except, Pass detected.", "reported by a tool", source="tool")
+    merged, _ = merge_candidates([tool, criterion_finding(number=3, title="Criterion 3 not met: a failed notification is logged")])
+    assert len(merged) == 1 and merged[0].criterion == 3 and merged[0].title.startswith("Criterion 3 not met")
+    assert merged[0].source == "tool" and merged[0].found_by == ["bandit", "compliance"]
+
+
+def test_without_a_requirement_the_more_specific_report_still_leads():
+    merged, _ = merge_candidates([speculative_security(), with_text(mk("logic_defect", by="defects", line=13, quote="with open(path) as f:"), "Other", "Something else.")])
+    assert merged[0].title == "Unvalidated file path leads to arbitrary file read" and merged[0].criterion is None
+
+
+def test_two_criteria_on_the_same_spot_keep_the_first_ones_number():
+    first, second = criterion_finding(number=1), criterion_finding(number=2, title="Criterion 2 not met: something else")
+    merged, _ = merge_candidates([first, second])
+    assert len(merged) == 1 and merged[0].criterion == 1
+
+
+def test_a_criterion_that_is_not_met_becomes_a_ticket_backed_finding():
+    from code_review_agent.pipeline.assemble import _finding_from_criterion
+    from code_review_agent.schemas import CriterionCheck
+
+    f = _finding_from_criterion(CriterionCheck(number=4, text="Orders of $100 or more ship free.", verdict="not_met", explanation="x", file="a.py", line=3))
+    assert f.criterion == 4 and f.category == "requirement_mismatch" and f.found_by == ["compliance"]
+
+
+def test_the_internal_criterion_marker_is_never_shown_to_the_model_and_shown_in_the_report():
+    from code_review_agent.reporting.report import render_markdown
+    from code_review_agent.schemas import ModelReview, ReviewResult, public_schema
+
+    assert "criterion" not in public_schema(ModelReview)["$defs"]["Finding"]["properties"]
+    text = render_markdown(ReviewResult(status="completed", findings=[criterion_finding(number=2)]))
+    assert "**Requirement:** acceptance criterion 2 of the ticket is not met" in text
+    assert "**Requirement:**" not in render_markdown(ReviewResult(status="completed", findings=[speculative_security()]))

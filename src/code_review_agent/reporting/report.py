@@ -219,6 +219,8 @@ def _render_finding(rank: int, f: Finding, problems: list[ValidationProblem]) ->
         "- **Location and quotes:** "
         + ("checked against the input" if not problems else "**NOT FULLY CONFIRMED**, see below"),
     ]
+    if f.criterion is not None:
+        out.append(f"- **Requirement:** acceptance criterion {f.criterion} of the ticket is not met (see the checklist)")
     if f.found_by:
         out.append(f"- **Found by:** {_line(', '.join(f.found_by))}")
     if f.source == "tool":
