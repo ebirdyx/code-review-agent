@@ -4,7 +4,7 @@
 const RECENT_REVIEWS = 3;  // individual reviews listed before "show older reviews"
 
 const state = {
-  more: false, runs: [], groups: [], selected: null, detail: null, tab: "report", job: null, config: {}, draft: {},
+  more: false, runs: [], groups: [], selected: null, detail: null, tab: "review", job: null, config: {}, draft: {},
   filter: "", open: {}, view: "run", picked: new Set(), comparison: null, scope: "all", stats: null,
 };
 
@@ -116,7 +116,7 @@ function eventTable(events) {
   return el("table", {}, el("tbody", {}, rows));
 }
 
-function findingCard(finding, index, triage) {
+function findingDetail(finding, index) {
   const sev = el("span", { class: "sev " + finding.severity, text: finding.severity.toUpperCase() });
   const where = finding.line ? `${finding.file}:${finding.line}` : `${finding.file} (no line)`;
   const badges = [];
@@ -126,8 +126,8 @@ function findingCard(finding, index, triage) {
   else if (finding.verification === "supported") badges.push(el("span", { class: "chip ok", text: "verified" }));
   else if (finding.verification === "uncertain") badges.push(el("span", { class: "chip warn", text: "verifier unsure" }));
   else if (finding.verification_note) badges.push(el("span", { class: "chip warn", text: "not verified" }));
-  const card = el("div", { class: "card" },
-    el("h3", {}, sev, finding.title),
+  const card = el("div", {},
+    el("h3", { class: "ftitle-big" }, sev, finding.title),
     el("div", { class: "meta", text: `${finding.category} · ${where}` }),
     badges.length ? el("div", { class: "summary" }, badges) : null,
     el("p", {}, inline(finding.explanation)));
@@ -135,20 +135,6 @@ function findingCard(finding, index, triage) {
   for (const ev of finding.evidence || []) card.append(el("div", { class: "muted", text: `Evidence from ${ev.source}:` }), el("pre", { text: ev.quote }));
   const problems = (state.detail.result.problems || []).filter((p) => p.finding_index === index);
   for (const p of problems) card.append(el("div", { class: "problem", text: `Not confirmed (${p.kind}): ${p.message}` }));
-
-  const draft = state.draft[index] || (state.draft[index] = { decision: triage[index]?.decision || "", note: triage[index]?.note || "" });
-  const accept = el("button", { text: "Accept" });
-  const dismiss = el("button", { text: "Dismiss" });
-  const note = el("input", { placeholder: "Optional note", value: draft.note });
-  const paint = () => {
-    accept.className = draft.decision === "accepted" ? "on-accept" : "";
-    dismiss.className = draft.decision === "dismissed" ? "on-dismiss" : "";
-  };
-  accept.onclick = () => { draft.decision = draft.decision === "accepted" ? "" : "accepted"; paint(); };
-  dismiss.onclick = () => { draft.decision = draft.decision === "dismissed" ? "" : "dismissed"; paint(); };
-  note.oninput = () => { draft.note = note.value; };
-  paint();
-  card.append(el("div", { class: "triage" }, accept, dismiss, note));
   return card;
 }
 
@@ -222,31 +208,126 @@ function dismissedView(result) {
       el("p", { text: "Verifier: " + d.reason }))));
 }
 
-function findingsView(detail) {
+function detailsView(detail) {
   const result = detail.result;
   if (!result) return el("p", { class: "hint", text: "No result yet." });
   if (result.status === "failed") return el("div", { class: "banner bad", text: `Review failed (${result.error.kind}): ${result.error.message}` });
-  const extras = [profileView(result), contextView(result), toolsView(result), passesView(result), checklistView(result)];
-  if (!result.findings.length) return el("div", {}, ...extras.filter(Boolean),
-    el("p", { text: "No findings were reported. That is the model's claim, not a guarantee." }), dismissedView(result));
+  return el("div", {}, ...[profileView(result), contextView(result), toolsView(result), passesView(result), checklistView(result), dismissedView(result)].filter(Boolean));
+}
+
+// ------------------------------------------------------------------- review screen
+// Findings on the left (worst first), the selected finding in the middle, the ticket requirements on the right.
+// Decisions are saved as you make them; j/k move, a accepts, d dismisses.
+
+const SEV_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
+const SEV_SHORT = { critical: "CRIT", high: "HIGH", medium: "MED", low: "LOW" };
+const DECISION_WORD = { accepted: "Accepted", dismissed: "Dismissed" };
+let saveEl = null;
+let toastTimer = null;
+
+function showToast(text, undo) {
+  document.querySelector(".toast")?.remove();
+  clearTimeout(toastTimer);
+  const toast = el("div", { class: "toast" }, el("span", { text }));
+  if (undo) toast.append(el("button", { text: "Undo", onclick: () => { toast.remove(); undo(); } }));
+  document.body.append(toast);
+  toastTimer = setTimeout(() => toast.remove(), 5000);
+}
+
+function setSaveText(text) { state.saveText = text; if (saveEl) saveEl.textContent = text; }
+
+async function saveTriage() {
+  const run = state.selected;
+  const decisions = Object.entries(state.draft).filter(([, d]) => d.decision)
+    .map(([i, d]) => ({ finding_index: Number(i), decision: d.decision, note: d.note || "" }));
+  setSaveText("Saving…");
+  try {
+    await api(`/api/runs/${enc(run)}/triage`, { reviewer: state.reviewer, decisions });
+    setSaveText(`Saved ${new Date().toTimeString().slice(0, 8)}`);
+  } catch (e) { setSaveText("Could not save: " + e.message); }
+}
+
+function reviewView(detail) {
+  const result = detail.result;
+  if (!result) return el("p", { class: "hint", text: detail.summary.status === "running" ? "Still running…" : "No result yet." });
+  if (result.status === "failed") return el("div", { class: "banner bad", text: `Review failed (${result.error.kind}): ${result.error.message}` });
+  const findings = result.findings;
   const triage = {};
   for (const d of (detail.triage?.decisions || [])) triage[d.finding_index] = d;
-  const reviewer = el("input", { placeholder: "Your name", value: detail.triage?.reviewer || "" });
-  const status = el("span", { class: "muted" });
-  const save = el("button", { class: "primary", text: "Save my decisions", onclick: async () => {
-    const decisions = Object.entries(state.draft).filter(([, d]) => d.decision)
-      .map(([i, d]) => ({ finding_index: Number(i), decision: d.decision, note: d.note || "" }));
-    try {
-      await api(`/api/runs/${enc(state.selected)}/triage`, { reviewer: reviewer.value, decisions });
-      status.textContent = `Saved ${decisions.length} decision(s) to triage.json and report-triaged.md`;
-    } catch (e) { status.textContent = "Could not save: " + e.message; }
-  } });
-  return el("div", {}, ...extras.filter(Boolean),
-    el("h2", { text: "Findings" }),
-    el("p", { class: "muted", text: "You decide. Accept a finding if it is a real problem, dismiss it if not." }),
-    result.findings.map((f, i) => findingCard(f, i, triage)),
-    el("div", { class: "triage" }, reviewer, save, status),
-    dismissedView(result));
+  findings.forEach((f, i) => { if (!state.draft[i]) state.draft[i] = { decision: triage[i]?.decision || "", note: triage[i]?.note || "" }; });
+  if (state.reviewer == null) state.reviewer = detail.triage?.reviewer || localStorage.getItem("reviewer") || "";
+  const order = findings.map((_, i) => i).sort((a, b) => (SEV_RANK[findings[a].severity] ?? 9) - (SEV_RANK[findings[b].severity] ?? 9) || a - b);
+  if (state.sel == null || !findings[state.sel]) state.sel = order.length ? order[0] : null;
+  const box = el("div", { class: "review" });
+
+  const decide = (index, value) => {
+    const draft = state.draft[index];
+    const before = draft.decision;
+    draft.decision = before === value ? "" : value;
+    paint(); saveTriage();
+    showToast(draft.decision ? `${DECISION_WORD[draft.decision]}: ${findings[index].title.length > 50 ? findings[index].title.slice(0, 50) + "…" : findings[index].title}` : "Decision cleared", () => { draft.decision = before; paint(); saveTriage(); });
+  };
+  const move = (step) => {
+    if (!order.length) return;
+    const at = order.indexOf(state.sel);
+    state.sel = order[Math.min(order.length - 1, Math.max(0, at + step))];
+    paint();
+  };
+  state.review = { decide: (v) => state.sel != null && decide(state.sel, v), move };
+
+  const left = () => {
+    const decided = findings.filter((_, i) => state.draft[i].decision).length;
+    const fill = el("div", { class: "fill" });
+    fill.style.width = (findings.length ? Math.round((decided / findings.length) * 100) : 0) + "%";
+    const reviewer = el("input", { placeholder: "Your name", value: state.reviewer });
+    reviewer.oninput = () => { state.reviewer = reviewer.value; localStorage.setItem("reviewer", reviewer.value); };
+    reviewer.onchange = () => { if (decided) saveTriage(); };
+    return el("div", { class: "rv-left" },
+      el("h2", { text: `Findings · ${decided} of ${findings.length} decided` }),
+      el("div", { class: "bar" }, el("div", { class: "track" }, fill)),
+      order.map((i) => {
+        const f = findings[i];
+        const d = state.draft[i].decision;
+        return el("div", { class: "frow" + (i === state.sel ? " sel" : ""), onclick: () => { state.sel = i; paint(); } },
+          el("span", { class: "mark " + (d || "none"), text: d === "accepted" ? "✓" : d === "dismissed" ? "✕" : "○", title: d || "undecided" }),
+          el("div", { class: "ftext" },
+            el("div", {}, el("span", { class: "sev " + f.severity, text: SEV_SHORT[f.severity] || f.severity.toUpperCase() }), f.title),
+            el("div", { class: "muted", text: f.line ? `${f.file}:${f.line}` : f.file })));
+      }),
+      el("div", { class: "reviewer" }, el("label", { class: "muted", text: "Reviewer" }), reviewer));
+  };
+
+  const middle = () => {
+    if (!findings.length) return el("div", { class: "rv-mid" }, el("p", { text: "No findings were reported. That is the model's claim, not a guarantee." }));
+    const draft = state.draft[state.sel];
+    const note = el("input", { placeholder: "Optional note", value: draft.note });
+    note.oninput = () => { draft.note = note.value; clearTimeout(note.timer); note.timer = setTimeout(() => { if (draft.decision) saveTriage(); }, 600); };
+    saveEl = el("span", { class: "muted", text: state.saveText || "Decisions are saved as you make them." });
+    return el("div", { class: "rv-mid" },
+      findingDetail(findings[state.sel], state.sel),
+      el("div", { class: "triage" },
+        el("button", { class: draft.decision === "accepted" ? "on-accept" : "", text: "Accept (a)", onclick: () => decide(state.sel, "accepted") }),
+        el("button", { class: draft.decision === "dismissed" ? "on-dismiss" : "", text: "Dismiss (d)", onclick: () => decide(state.sel, "dismissed") }),
+        note),
+      el("div", { class: "triage" },
+        el("button", { text: "◀ Previous (k)", onclick: () => move(-1) }), el("button", { text: "Next (j) ▶", onclick: () => move(1) }), saveEl));
+  };
+
+  const right = () => {
+    const criteria = result.criteria || [];
+    const rows = criteria.map((c) => {
+      const [label, cls] = VERDICT[c.verdict] || [c.verdict, ""];
+      const linked = findings.findIndex((f) => f.criterion === c.number);
+      return el("div", { class: "req" + (linked >= 0 ? " link" : ""), onclick: () => { if (linked >= 0) { state.sel = linked; paint(); } }, title: linked >= 0 ? "Show the finding for this requirement" : "" },
+        el("span", { class: "chip " + cls, text: label }), el("div", { text: `${c.number}. ${c.text}` }));
+    });
+    return el("div", { class: "rv-right" }, el("h2", { text: "Ticket requirements" }),
+      rows.length ? rows : el("p", { class: "hint", text: "No ticket requirements were available for this review." }));
+  };
+
+  function paint() { box.replaceChildren(left(), middle(), right()); }
+  paint();
+  return box;
 }
 
 function rawView(detail) {
@@ -473,10 +554,12 @@ function renderDetail() {
   const d = state.detail;
   if (!d) return;
   const s = d.summary;
-  const tabs = [["report", "Report"], ["findings", "Findings"], ["timeline", "Timeline"], ["raw", "Raw"]];
+  const tabs = [["review", "Review"], ["details", "Details"], ["report", "Report"], ["timeline", "Timeline"], ["raw", "Raw"]];
+  state.review = null;  // set again by the review screen, so the keys only work there
   let body;
   if (state.tab === "report") body = d.report ? renderMarkdown(d.report) : el("p", { class: "hint", text: s.status === "running" ? "Still running…" : "No report." });
-  else if (state.tab === "findings") body = findingsView(d);
+  else if (state.tab === "review") body = reviewView(d);
+  else if (state.tab === "details") body = detailsView(d);
   else if (state.tab === "timeline") body = eventTable(d.events);
   else body = rawView(d);
   const ticketChip = s.findings == null ? null : (s.ticket ? "ticket " + s.ticket : "no ticket");
@@ -493,7 +576,7 @@ function renderDetail() {
 
 async function selectRun(name) {
   state.view = "run";
-  if (state.selected !== name) state.draft = {};
+  if (state.selected !== name) { state.draft = {}; state.sel = null; state.reviewer = null; state.saveText = ""; }
   state.selected = name; state.job = null;
   history.replaceState(null, "", `#run=${encodeURIComponent(name)}&tab=${state.tab}`);
   renderRunList();
@@ -519,7 +602,7 @@ async function pollJob() {
   try {
     const job = await api(`/api/jobs/${state.job}`);
     renderJob(job);
-    if (job.status === "done" && job.run_name) { state.job = null; await refreshRuns(); state.tab = "report"; await selectRun(job.run_name); }
+    if (job.status === "done" && job.run_name) { state.job = null; await refreshRuns(); state.tab = "review"; await selectRun(job.run_name); }
     else if (job.status === "failed") { state.job = null; await refreshRuns(); }
   } catch (e) { state.job = null; }
 }
@@ -547,8 +630,31 @@ async function startReview(event) {
   } finally { button.disabled = false; }
 }
 
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  document.getElementById("theme").textContent = theme === "dark" ? "☀ Light" : "☾ Dark";
+}
+
 async function init() {
+  applyTheme(localStorage.getItem("theme") === "light" ? "light" : "dark");  // dark unless the user chose light
+  document.getElementById("theme").addEventListener("click", () => {
+    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    localStorage.setItem("theme", next);
+    applyTheme(next);
+  });
   document.getElementById("new-review").addEventListener("submit", startReview);
+  document.getElementById("jira").addEventListener("change", (e) => { document.getElementById("jira-opts").hidden = !e.target.checked; });
+  document.addEventListener("keydown", (e) => {  // keyboard triage on the review screen
+    if (state.view !== "run" || state.tab !== "review" || !state.review || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+    const key = e.key.toLowerCase();
+    if (key === "j" || key === "arrowdown") state.review.move(1);
+    else if (key === "k" || key === "arrowup") state.review.move(-1);
+    else if (key === "a") state.review.decide("accepted");
+    else if (key === "d") state.review.decide("dismissed");
+    else return;
+    e.preventDefault();
+  });
   document.getElementById("show-overview").addEventListener("click", showOverview);
   document.getElementById("filter").addEventListener("input", (e) => { state.filter = e.target.value; renderRunList(); });
   try {
@@ -568,9 +674,10 @@ async function init() {
     await showEvaluations();
     if (names.length) await runComparison();
   }
-  const link = startHash.match(/^#run=([^&]+)(?:&tab=(\w+))?/);  // deep link: #run=<name>&tab=findings
+  const link = startHash.match(/^#run=([^&]+)(?:&tab=(\w+))?/);  // deep link: #run=<name>&tab=review
   if (link) {
-    if (["report", "findings", "timeline", "raw"].includes(link[2])) state.tab = link[2];
+    if (link[2] === "findings") state.tab = "review";  // old links
+    else if (["review", "details", "report", "timeline", "raw"].includes(link[2])) state.tab = link[2];
     await selectRun(decodeURIComponent(link[1]));
   }
   setInterval(refreshRuns, 3000);

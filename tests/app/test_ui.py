@@ -516,7 +516,7 @@ def test_the_page_has_the_filter_the_evaluations_view_and_the_new_markers():
     source = (ROOT / "src/code_review_agent/app/web/app.js").read_text(encoding="utf-8")
     html = (ROOT / "src/code_review_agent/app/web/index.html").read_text(encoding="utf-8")
     assert 'id="filter"' in html and 'id="show-overview"' in html
-    for needed in ("/api/stats", "comparisonCards", "actionbar", "viewTabs", "/api/groups", "/api/compare", "#evaluations&compare=", "state.filter", "finding.criterion", "contextView", "show ${shown.length - cap} older reviews"):
+    for needed in ("reviewView", "saveTriage", "addEventListener(\"keydown\"", "showToast", "Ticket requirements", "/api/stats", "comparisonCards", "actionbar", "viewTabs", "/api/groups", "/api/compare", "#evaluations&compare=", "state.filter", "finding.criterion", "contextView", "show ${shown.length - cap} older reviews"):
         assert needed in source, needed
 
 
@@ -570,3 +570,19 @@ def test_stats_refuse_an_unknown_scope_and_cache_finished_runs(ui):
     assert app.run_stats(folder) is first  # unchanged files: same object back
     (folder / "triage.json").write_text(json.dumps({"reviewer": "x", "decisions": []}), encoding="utf-8")
     assert app.run_stats(folder) is not first  # a decision was saved: recomputed
+
+
+def test_the_page_is_dark_by_default_and_has_a_light_theme_toggle():
+    web = ROOT / "src/code_review_agent/app/web"
+    css = (web / "app.css").read_text(encoding="utf-8")
+    source = (web / "app.js").read_text(encoding="utf-8")
+    html = (web / "index.html").read_text(encoding="utf-8")
+    assert 'id="theme"' in html
+    assert ":root {" in css.split(':root[data-theme="light"]')[0] and "color-scheme: dark" in css  # dark needs no attribute
+    assert ':root[data-theme="light"]' in css and "color-scheme: light" in css
+    assert 'localStorage.getItem("theme") === "light" ? "light" : "dark"' in source
+    palette_end = css.index("input, select, textarea")
+    assert "var(--soft)" not in css[: css.index("--ok-bg")]  # a palette entry must never refer to itself
+    import re
+    for name in re.findall(r"var\((--[a-z0-9-]+)\)", css[palette_end:]):
+        assert css.count(f"{name}:") >= 2, f"{name} must be defined in both themes"

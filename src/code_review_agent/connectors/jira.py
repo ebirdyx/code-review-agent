@@ -151,7 +151,7 @@ def criteria_from_description(description: str) -> list[str]:
 def extract_issue_keys(pr: PullRequestMetadata, projects: list[str] | None = None) -> list[str]:
     """Jira keys linked from a pull request, in order of appearance, without duplicates.
 
-    Link convention (documented in the README):
+    Link convention (documented in docs/usage.md):
       - with a project list (JIRA_PROJECTS=SHOP,APP): any key of those projects in the
         PR title or description counts;
       - without one, only EXPLICIT links count: a line "Jira: SHOP-1[, SHOP-2]" (or
@@ -195,7 +195,7 @@ class JiraClient:
         token = token or os.environ.get(TOKEN_ENV)
         missing = [n for n, v in ((BASE_URL_ENV, base_url), (EMAIL_ENV, email), (TOKEN_ENV, token)) if not v]
         if missing:
-            raise JiraError(f"Jira is not configured: set {', '.join(missing)}. See the README, section Jira.")
+            raise JiraError(f"Jira is not configured: set {', '.join(missing)}. See docs/usage.md, section Jira.")
         self.acceptance_field = acceptance_field or os.environ.get(FIELD_ENV) or None
         base_url = base_url.strip().rstrip("/")
         try:

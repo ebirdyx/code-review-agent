@@ -11,11 +11,22 @@
   <header>
     <div class="brand"><h1>Code Review Agent</h1><span id="cfg" class="muted"></span></div>
     <form id="new-review" autocomplete="off">
-      <input id="pr" placeholder="owner/repo#12  or  PR URL" size="34" required>
-      <label class="check"><input type="checkbox" id="jira"> Jira ticket</label>
-      <input id="projects" placeholder="Jira projects, e.g. KAN" size="16">
-      <button id="start" type="submit">Review this PR</button>
+      <label for="pr" class="flabel">Pull request</label>
+      <div class="fgroup">
+        <input id="pr" placeholder="owner/repo#12 or paste the PR link" size="40" required>
+        <button id="start" type="submit">Review this PR</button>
+      </div>
+      <span></span>
+      <div class="fgroup">
+        <label class="check"><input type="checkbox" id="jira"> Also read its Jira ticket</label>
+        <span id="jira-opts" hidden>
+          <input id="projects" placeholder="Prefix, e.g. KAN" size="14" aria-label="Jira ticket prefix"
+                 title="Optional. Finds keys like KAN-4 anywhere in the PR title or text. Not needed if the description says 'Jira: KAN-4'.">
+          <span class="muted">optional: finds KAN-4 in the PR text</span>
+        </span>
+      </div>
     </form>
+    <button id="theme" type="button" title="Switch between dark and light"></button>
   </header>
   <main>
     <aside>
